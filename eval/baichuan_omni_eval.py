@@ -9,7 +9,7 @@ import ujson
 
 from tqdm import tqdm
 import soundfile as sf
-from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer
 import time
 
 # Suppress unnecessary warnings
@@ -17,12 +17,13 @@ warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
 warnings.filterwarnings("ignore", category=UserWarning, module="librosa")
 warnings.filterwarnings("ignore", category=FutureWarning, module="librosa")
 
-# Add dataloader path
-sys.path.append("/root/siton-tmp/code/omni-bench")
-from dataloader import VideoQADaloader
+# Add project root to path for relative imports
+import os
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)
+sys.path.insert(0, project_root)
 
-# Add utils path
-sys.path.append("/root/siton-tmp/code/omni-bench")
+from dataloader import VideoQADaloader
 from utils.utils import (
     clean_text,
     save_results,
@@ -36,7 +37,7 @@ from utils.utils import (
 
 # Set environment variables
 os.environ['TRANSFORMERS_OFFLINE'] = '1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '2, 3'
+# os.environ['CUDA_VISIBLE_DEVICES'] = '2, 3'
 
 
 
@@ -283,20 +284,33 @@ def run_baichuan_evaluation(model_path: str, data_json_file: str=None, video_dir
 
 
 if __name__ == "__main__":
-    task_name = "qa_data"
-
-    base_dir = "/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/code/omni-bench"
-    #data_json_file = f"{base_dir}/final_data/qa_data.json"
-    data_json_file = "/root/siton-tmp/code/omni-bench/final_data/qa_back_data.json"
-    video_dir = "/root/siton-tmp/omni-videos/omni_videos_v3"
+    import argparse
     
-    # Model path
-    model_path = "/root/siton-tmp/code/models/baichuan-inc_Baichuan-Omni-1d5"
-    model_basename = "Baichuan-Omni-1.5"
-    output_file = f"/root/siton-tmp/code/omni-bench/eval_results/Baichuan-Omni-1.5_qa_data_back.json"
-
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    parser = argparse.ArgumentParser(description="Run Baichuan-Omni evaluation")
+    parser.add_argument("--model_path", type=str, required=True,
+                       help="Path to the Baichuan-Omni model")
+    parser.add_argument("--data_json_file", type=str, required=True,
+                       help="Path to the QA data JSON file")
+    parser.add_argument("--video_dir", type=str, required=True,
+                       help="Path to the video directory")
+    parser.add_argument("--output_file", type=str,
+                       help="Path to output results file (optional)")
+    parser.add_argument("--max_duration", type=int, default=6000,
+                       help="Maximum video duration in seconds (default: 6000)")
     
-    max_duration = 6000  # Limit video duration to 60 seconds
+    args = parser.parse_args()
     
-    run_baichuan_evaluation(model_path, data_json_file, video_dir, output_file, max_duration)
+    # Set default output file if not provided
+    if not args.output_file:
+        model_name = os.path.basename(args.model_path)
+        output_dir = os.path.join(project_root, "eval_results")
+        os.makedirs(output_dir, exist_ok=True)
+        args.output_file = os.path.join(output_dir, f"{model_name}_results.json")
+    
+    print(f"Model path: {args.model_path}")
+    print(f"Data file: {args.data_json_file}")
+    print(f"Video dir: {args.video_dir}")
+    print(f"Output file: {args.output_file}")
+    print(f"Max duration: {args.max_duration}s")
+    
+    run_baichuan_evaluation(args.model_path, args.data_json_file, args.video_dir, args.output_file, args.max_duration)
