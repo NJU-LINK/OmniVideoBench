@@ -54,7 +54,7 @@ OmniVideoBench tests **deep audio-visual reasoning** across a wide variety of ta
 <p align="center">
   <img src="./static/images/main.png" width="88%" alt="Dataset Statistics">
   <br>
-  <em>Figure 3. OmniVideoBench covers broad categories and reasoning types. Distributions show video durations and three audio types (Speech, Sound, Music).</em>
+  <em>Figure 2. OmniVideoBench covers broad categories and reasoning types. Distributions show video durations and three audio types (Speech, Sound, Music).</em>
 </p>
 
 ---
@@ -74,8 +74,20 @@ A glance at how OmniVideoBench was built — from raw videos to verified reasoni
 <p align="center">
   <img src="./static/images/pipeline.png" width="85%" alt="Data Pipeline">
   <br>
-  <em>Figure 2. Data construction and refinement pipeline of OmniVideoBench.</em>
+  <em>Figure 3. Data construction and refinement pipeline of OmniVideoBench.</em>
 </p>
+
+---
+
+## 🌟 LinLicense
+
+Our dataset is under the CC-BY-NC-SA-4.0 license.
+
+⚠️ If you need to access and use our dataset, you must understand and agree: This dataset is for research purposes only and cannot be used for any commercial or other purposes. The user assumes all effects arising from any other use and dissemination.
+
+We do not own the copyright of any raw video files. Currently, we provide video access to researchers under the condition of acknowledging the above license. For the video data used, we respect and acknowledge any copyrights of the video authors. 
+
+If the original authors of the related works still believe that the videos should be removed, please contact caoruili507@gmail.com or directly raise an issue.
 
 ---
 
