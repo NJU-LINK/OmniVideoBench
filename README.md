@@ -79,7 +79,7 @@ A glance at how OmniVideoBench was built — from raw videos to verified reasoni
 
 ---
 
-## 🌟 LinLicense
+## 🌟 License
 
 Our dataset is under the CC-BY-NC-SA-4.0 license.
 
