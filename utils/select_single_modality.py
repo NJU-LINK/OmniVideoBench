@@ -1,7 +1,7 @@
 import json
 import argparse
 
-# 默认输入输出路径 - 使用相对路径
+# Default input/output paths - using relative paths
 DEFAULT_INPUT_JSON = "data/input.json"
 DEFAULT_OUTPUT_JSON = "data/output_single_modality.json"
 
@@ -25,7 +25,7 @@ def filter_questions(data):
             steps = q.get("reasoning_steps", [])
             modalities = {step["modality"] for step in steps if "modality" in step}
 
-            # 判断是否只有一个模态
+            # Check if there's only one modality
             if len(modalities) == 1:
                 new_questions.append(q)
 
@@ -36,17 +36,17 @@ def filter_questions(data):
     return filtered_data
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="筛选单模态问题")
-    parser.add_argument("--input", "-i", default=DEFAULT_INPUT_JSON, 
-                       help="输入JSON文件路径")
+    parser = argparse.ArgumentParser(description="Filter single modality questions")
+    parser.add_argument("--input", "-i", default=DEFAULT_INPUT_JSON,
+                       help="Input JSON file path")
     parser.add_argument("--output", "-o", default=DEFAULT_OUTPUT_JSON,
-                       help="输出JSON文件路径")
+                       help="Output JSON file path")
     args = parser.parse_args()
     
-    print(f"输入文件: {args.input}")
-    print(f"输出文件: {args.output}")
+    print(f"Input file: {args.input}")
+    print(f"Output file: {args.output}")
     
     data = load_json(args.input)
     filtered = filter_questions(data)
     save_json(filtered, args.output)
-    print(f"筛选完成，结果已保存到 {args.output}")
+    print(f"Filtering completed, results saved to {args.output}")
