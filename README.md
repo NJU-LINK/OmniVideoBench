@@ -40,6 +40,25 @@ It’s a **large-scale, rigorously curated** benchmark for assessing **synergist
 
 ---
 
+
+## 🎧 Diverse Reasoning Dimensions
+
+OmniVideoBench tests **deep audio-visual reasoning** across a wide variety of tasks and modalities:
+
+- **628 videos** from 8 major categories & 68 subcategories  
+- **1,000 QA pairs** with detailed reasoning chains  
+- **13 reasoning types**, from perception to causal inference  
+- **Audio–Visual Complementarity** ensured for every question  
+- **Long-Video Evaluation:** durations up to 30 minutes  
+
+<p align="center">
+  <img src="./static/images/main.png" width="88%" alt="Dataset Statistics">
+  <br>
+  <em>Figure 3. OmniVideoBench covers broad categories and reasoning types. Distributions show video durations and three audio types (Speech, Sound, Music).</em>
+</p>
+
+---
+
 ## 🧩 Pipeline
 
 A glance at how OmniVideoBench was built — from raw videos to verified reasoning annotations 👇
@@ -60,23 +79,6 @@ A glance at how OmniVideoBench was built — from raw videos to verified reasoni
 
 ---
 
-## 🎧 Diverse Reasoning Dimensions
-
-OmniVideoBench tests **deep audio-visual reasoning** across a wide variety of tasks and modalities:
-
-- **628 videos** from 8 major categories & 68 subcategories  
-- **1,000 QA pairs** with detailed reasoning chains  
-- **13 reasoning types**, from perception to causal inference  
-- **Audio–Visual Complementarity** ensured for every question  
-- **Long-Video Evaluation:** durations up to 30 minutes  
-
-<p align="center">
-  <img src="./static/images/main.png" width="88%" alt="Dataset Statistics">
-  <br>
-  <em>Figure 3. OmniVideoBench covers broad categories and reasoning types. Distributions show video durations and three audio types (Speech, Sound, Music).</em>
-</p>
-
----
 
 ## 📊 Evaluation Results
 
