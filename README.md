@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./static/images/logo.png" width="120" alt="OmniVideoBench Logo" style="border-radius: 12px;">
+  <img src="./static/images/logo.gif" width="260" alt="OmniVideoBench Logo" style="border-radius: 12px;">
 </p>
 
 <h1 align="center">OmniVideoBench: Towards Audio-Visual Understanding
@@ -64,11 +64,11 @@ A glance at how OmniVideoBench was built — from raw videos to verified reasoni
 
 OmniVideoBench tests **deep audio-visual reasoning** across a wide variety of tasks and modalities:
 
-- 🎞️ **628 videos** from 8 major categories & 68 subcategories  
-- 🧠 **1,000 QA pairs** with detailed reasoning chains  
-- 🧩 **13 reasoning types**, from perception to causal inference  
-- 🔄 **Audio–Visual Complementarity** ensured for every question  
-- 🕒 **Long-Video Evaluation:** durations up to 30 minutes  
+- **628 videos** from 8 major categories & 68 subcategories  
+- **1,000 QA pairs** with detailed reasoning chains  
+- **13 reasoning types**, from perception to causal inference  
+- **Audio–Visual Complementarity** ensured for every question  
+- **Long-Video Evaluation:** durations up to 30 minutes  
 
 <p align="center">
   <img src="./static/images/main.png" width="88%" alt="Dataset Statistics">
@@ -78,7 +78,7 @@ OmniVideoBench tests **deep audio-visual reasoning** across a wide variety of ta
 
 ---
 
-## 📊 Benchmark Results
+## 📊 Evaluation Results
 
 OmniVideoBench highlights a clear **performance gap** between **closed-source** and **open-source** omni-models —  
 showing that genuine audio-visual reasoning remains a **major unsolved challenge**.
@@ -89,14 +89,31 @@ showing that genuine audio-visual reasoning remains a **major unsolved challenge
   <em>Figure 4. Comparison across Gemini, Qwen, Baichuan, MiniCPM, and VideoLLaMA models on OmniVideoBench.</em>
 </p>
 
----
+<details>
+<summary>📦 More results can been seen here.</summary>
 
-## 💡 Key Takeaways
+<p align="center">
+  <img src="./static/images/acc_tasks.png" width="80%" alt="Benchmark Results">
+  <br>
+  <em>Figure 5. Performance Comparison of some Open-Source and Closed-Source Omni Models on 13 Tasks in OmniVideoBench. Here, “Attr”: Attribute Comparison, “Bac&Mu”: Background and Music Un- derstanding, “Caus”: Cause and Effect Reasoning, “Coun”: Counting, “Ego”: Ego Reasoning, “Fine”: Fine-grained Perception, “Hypo”: Hypothetical Reasoning, “Ref”: Referential Reasoning, “Rela”: Rela- tionship Reasoning, “Senti”: Sentiment Analysis, “Spati”: Spatial Reasoning, “Summ”: Summarization,
+“Tempo”: Temporal Sequencing Understanding.
+ </em>
+</p>
 
-- 🧩 True **audio–visual synergy** is still challenging for today’s MLLMs  
-- 🎧 **Audio cues** (especially music) remain underutilized  
-- ⏳ **Long-video understanding** drastically increases model difficulty  
-- 🚀 OmniVideoBench sets a **new bar** for holistic multimodal evaluation  
+<p align="center">
+  <img src="./static/images/asr.png" width="90%" alt="Benchmark Results">
+  <br>
+  
+</p>
+
+<p align="center">
+  <img src="./static/images/frames.png" width="90%" alt="Benchmark Results">
+  <br>
+  
+</p>
+
+</details>
+
 
 ---
 
@@ -106,7 +123,5 @@ If you find **OmniVideoBench** useful for your research, please cite:
 
 ```bibtex
 @article{OmniVideoBench2025,
-  title={OmniVideoBench: Towards Audio-Visual Understanding Evaluation for Omni MLLMs},
-  author={Li, Caorui and Chen, Yu and Ji, Yiyan and Xu, Jin and Cui, Zhenyu and Li, Shihao and Zhang, Yuanxing and Tang, Jiafu and Song, Zhenghao and Zhang, Dingling and et al.},
-  year={2025}
+  title={OmniVideoBench: Towards Audio-Visual Understanding Evaluation for Omni MLLMs}
 }
