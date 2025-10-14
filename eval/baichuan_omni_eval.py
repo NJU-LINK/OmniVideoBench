@@ -24,6 +24,7 @@ project_root = os.path.dirname(current_dir)
 sys.path.insert(0, project_root)
 
 from dataloader import VideoQADaloader
+
 from utils.utils import (
     clean_text,
     save_results,

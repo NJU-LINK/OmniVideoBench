@@ -29,7 +29,7 @@ from dataloader import VideoQADaloader
 # sys.path.append("../../utils/")
 sys.path.append("/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/code/omni-bench/utils")
 
-from utils import (
+from utils.utils import (
     # load_model_and_processor,
     clean_text,
     save_results,

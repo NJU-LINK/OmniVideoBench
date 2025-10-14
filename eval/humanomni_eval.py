@@ -2,6 +2,7 @@ import os
 import json
 import math
 import tempfile
+import argparse
 from typing import List, Dict, Any
 import gc
 import psutil
@@ -18,22 +19,22 @@ from transformers import AutoModel, AutoTokenizer, BertTokenizer
 from humanomni import model_init, mm_infer
 from humanomni.utils import disable_torch_init
 
-# 设置环境变量
 os.environ['TRANSFORMERS_OFFLINE'] = '1'
 os.environ['HF_DATASETS_OFFLINE'] = '1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
 
+# Add project root to path for relative imports
+import os
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)
+sys.path.insert(0, project_root)
 
-sys.path.append("/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/code/omni-bench")
 from dataloader import VideoQADaloader
-
-sys.path.append("/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/code/omni-bench")
 from utils.utils import set_seed, filter_qa_pairs_by_duration
 
 set_seed(42)
 
 
-# 添加问题视频黑名单
+# Add problematic videos to blacklist
 PROBLEMATIC_VIDEOS = set()
 
 def get_video_chunk_content(video_path, flatten=False):
@@ -309,36 +310,82 @@ def evaluate_model(dataloader, model, tokenizer, output_file,max_duration):
     print(f"问题视频数量: {len(PROBLEMATIC_VIDEOS)}")
     print(f"正确率为：{( right_count / processed_count ) * 100: .2f}%")
 
+def parse_args():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(description="HumanOmni model evaluation script")
+    
+    # Data related arguments
+    parser.add_argument("--task_name", type=str, default="qa_data",
+                       help="Task name for output file naming")
+    parser.add_argument("--data_json_file", type=str, required=True,
+                       help="Path to QA data JSON file")
+    parser.add_argument("--video_dir", type=str, required=True,
+                       help="Path to video files directory")
+    
+    # Model related arguments
+    parser.add_argument("--model_name", type=str, required=True,
+                       help="Path to model directory")
+    parser.add_argument("--bert_model", type=str, default="./bert-base-uncased",
+                       help="Path to BERT model")
+    
+    # Output related arguments
+    parser.add_argument("--output_dir", type=str, default="./eval_results",
+                       help="Output directory for results")
+    
+    # Evaluation parameters
+    parser.add_argument("--max_duration", type=int, default=6000,
+                       help="Maximum video duration in seconds")
+    parser.add_argument("--cuda_visible_devices", type=str, default="0",
+                       help="CUDA visible devices")
+    
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    # task_name = "first_test"
-    task_name = "qa_data"
-    # data_json_file = "/fs-computility/llm_code_collab/liujiaheng/caoruili/omni-bench/data/merged_qas_1_0811.json"
-    data_json_file = "/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/code/omni-bench/final_data/qa_data.json"
-    video_dir = "/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/omni_videos_v2"
-    # ref_audio_path = "/fs-computility/llm_code_collab/liujiaheng/caoruili/models/MiniCPM-o-2_6/assets/demo.wav"
-    model_name = "/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/code/models/HumanOmni-7B"
-    model_basename = os.path.basename(model_name)
-    output_file = f"/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/code/omni-bench/eval_results/{model_basename}_{task_name}.json"
+    # Parse command line arguments
+    args = parse_args()
+    
+    # Set environment variables
+    os.environ['CUDA_VISIBLE_DEVICES'] = args.cuda_visible_devices
+    
+    # Build output file path
+    model_basename = os.path.basename(args.model_name)
+    output_file = os.path.join(args.output_dir, f"{model_basename}_{args.task_name}.json")
+    
+    # Create output directory
+    os.makedirs(args.output_dir, exist_ok=True)
+    
+    # Print configuration
+    print("=" * 50)
+    print("HumanOmni Evaluation Configuration:")
+    print(f"Task Name: {args.task_name}")
+    print(f"Data File: {args.data_json_file}")
+    print(f"Video Directory: {args.video_dir}")
+    print(f"Model Path: {args.model_name}")
+    print(f"BERT Model: {args.bert_model}")
+    print(f"Output File: {output_file}")
+    print(f"Max Duration: {args.max_duration} seconds")
+    print(f"CUDA Devices: {args.cuda_visible_devices}")
+    print("=" * 50)
+    
+    # Initialize data loader
+    dataloader = VideoQADaloader(args.data_json_file, args.video_dir)
 
-    dataloader = VideoQADaloader(data_json_file, video_dir)
-
-    max_duration=6000
-
-    # 初始化BERT分词器
-    bert_model = "./bert-base-uncased"
-    bert_tokenizer = BertTokenizer.from_pretrained(bert_model,
-                                        cache_dir=bert_model,
+    # Initialize BERT tokenizer
+    bert_tokenizer = BertTokenizer.from_pretrained(args.bert_model,
+                                        cache_dir=args.bert_model,
                                         local_files_only=True)
-    print("init tokenizer")
-    # 禁用Torch初始化
+    print("BERT tokenizer initialized")
+    
+    # Disable torch initialization
     disable_torch_init()
 
-    # 初始化模型、处理器和分词器
-    model, processor, tokenizer = model_init(model_path=model_name)
+    # Initialize model, processor and tokenizer
+    model, processor, tokenizer = model_init(model_path=args.model_name)
     model = model.eval().cuda()
-    print(model.hf_device_map)
+    print(f"Model device map: {model.hf_device_map}")
 
-    # 直接在evaluate_model中处理结果写入
-    evaluate_model(dataloader, model, tokenizer, output_file,max_duration)
+    # Execute evaluation
+    evaluate_model(dataloader, model, tokenizer, output_file, args.max_duration)
 
-    print(f"\n评测完成，结果已实时保存到 {output_file}")
+    print(f"\nEvaluation completed, results saved to {output_file}")
