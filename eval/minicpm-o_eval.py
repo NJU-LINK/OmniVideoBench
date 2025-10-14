@@ -17,7 +17,10 @@ from transformers import AutoModel, AutoTokenizer
 import random
 
 import sys
-sys.path.append("/root/siton-tmp/code/omni-bench")
+# Add project root to path for relative imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)
+sys.path.insert(0, project_root)
 from dataloader import VideoQADaloader
 
 # # 设置环境变量

@@ -18,6 +18,8 @@ import random
 import sys
 sys.path.append("/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/code/omni-bench")
 sys.path.append('/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/code/models/MiniCPM-o-2_6')
+
+
 from dataloader import VideoQADaloader
 
 # 设置环境变量

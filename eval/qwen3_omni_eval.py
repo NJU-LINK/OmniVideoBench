@@ -16,7 +16,10 @@ from qwen_omni_utils import process_mm_info
 
 
 import sys
-sys.path.append("/root/siton-tmp/code/omni-bench")
+# Add project root to path for relative imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)
+sys.path.insert(0, project_root)
 from utils.utils import (
     clean_text,
     create_unique_id,
@@ -32,7 +35,6 @@ from utils.utils import (
 from utils.vision_process import process_vision_info
 from utils.audio_process import process_audio_info
 
-sys.path.append("/root/siton-tmp/code/omni-bench")
 from dataloader import VideoQADaloader
 
 
@@ -234,14 +236,12 @@ def process_single_qa_pair(qa_pair, model, processor, processed_ids):
     return single_result, False
 
 
-def run_qwen_evaluation(data_json_file: str, video_dir: str, output_file: str, max_duration: int):
+def run_qwen_evaluation(data_json_file: str, video_dir: str, output_file: str, max_duration: int, model_path: str):
     """Run the evaluation on the dataset using the Qwen-Omni model."""
     set_seed(42)
 
     # Initialize model and processor
-    MODEL_NAME = "/root/siton-tmp/code/models/Qwen3-Omni-30B-A3B-Instruct"
-    # MODEL_NAME = "/root/siton-tmp/code/models/Qwen_Qwen2.5-Omni-7B"
-    model, processor = load_model_and_processor(MODEL_NAME)
+    model, processor = load_model_and_processor(model_path)
     
     # Load and filter data
     dataloader = VideoQADaloader(data_json_file=data_json_file, video_dir=video_dir)
@@ -258,7 +258,7 @@ def run_qwen_evaluation(data_json_file: str, video_dir: str, output_file: str, m
     # Load existing results for resume functionality
     results, processed_ids = load_existing_results(output_file)
     
-    print(f"Starting evaluation on {len(filtered_qa_pairs)} QA pairs with {MODEL_NAME}...")
+    print(f"Starting evaluation on {len(filtered_qa_pairs)} QA pairs with {model_path}...")
     print(f"Resuming from {len(results)} existing results")
 
     start_index = len(results)
@@ -291,13 +291,15 @@ def run_qwen_evaluation(data_json_file: str, video_dir: str, output_file: str, m
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Evaluate Qwen3-Omni model on video QA dataset")
+    parser.add_argument("--data_json_file", type=str, required=True, help="Path to the data JSON file")
+    parser.add_argument("--video_dir", type=str, required=True, help="Directory containing video files")
+    parser.add_argument("--output_file", type=str, default="./eval_results/qwen3_omni_output.json", help="Output file path for evaluation results")
+    parser.add_argument("--model_path", type=str, required=True, help="Path to the Qwen3-Omni model")
+    parser.add_argument("--max_duration", type=int, default=6000, help="Maximum video duration in seconds")
+    args = parser.parse_args()
     
-    data_json_file = "/root/siton-tmp/code/omni-bench/final_data/qa_data.json"
-    video_dir = "/root/siton-tmp/omni-videos/omni_videos_v3"
-    output_file = "/root/siton-tmp/code/omni-bench/eval_results/qwen3_omni_30B_qa_data_open_ended.json"
+    os.makedirs(os.path.dirname(args.output_file), exist_ok=True)
     
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
-    
-    max_duration = 6000
-    
-    run_qwen_evaluation(data_json_file, video_dir, output_file, max_duration)
+    run_qwen_evaluation(args.data_json_file, args.video_dir, args.output_file, args.max_duration, args.model_path)

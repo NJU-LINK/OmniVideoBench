@@ -14,16 +14,20 @@ from transformers import AutoProcessor, GenerationConfig
 import random
 
 import sys
-sys.path.append("/root/siton-tmp/code/omni-bench")
+# Add project root to path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)
+sys.path.insert(0, project_root)
 from dataloader import VideoQADaloader
 
-# 添加Ming模型路径
-sys.path.append("/root/siton-tmp/code/omni-bench/model/Ming")
+# Add Ming model path
+ming_model_path = os.path.join(project_root, "model", "Ming")
+sys.path.insert(0, ming_model_path)
 from modeling_bailingmm import BailingMMNativeForConditionalGeneration
 
 import torch.distributed as dist
 
-# 设置环境变量
+# Set environment variables
 os.environ['TRANSFORMERS_OFFLINE'] = '1'
 # os.environ['CUDA_VISIBLE_DEVICES'] = '0, 1, 2, 3'
 
@@ -39,20 +43,20 @@ def set_seed(seed: int = 42):
 
 set_seed(42)
 
-# 添加问题视频黑名单
+# Blacklist for problematic videos
 PROBLEMATIC_VIDEOS = set()
 
 def extract_answer_letter(response):
     """
-    使用正则表达式从模型回答中提取答案字母 (A, B, C, D)
+    Extract answer letter (A, B, C, D) from model response using regex
     """
     if not response:
         return ""
     
-    # 清理回答文本
+    # Clean response text
     response = response.strip()
     
-    # 尝试多种正则模式来提取答案
+    # Try multiple regex patterns to extract answer
     patterns = [
         r'^([ABCD])\.?\s*',  # Starts with A. or A
         r'([ABCD])\.?\s*$',  # Ends with A. or A
@@ -68,7 +72,7 @@ def extract_answer_letter(response):
         if match:
             return match.group(1).upper()
     
-    # 如果没有找到，返回原始回答的第一个字符（如果是A-D）
+    # If not found, return the first character of the response (if it's A-D)
     first_char = response[0].upper() if response else ""
     if first_char in ['A', 'B', 'C', 'D']:
         return first_char
@@ -77,7 +81,7 @@ def extract_answer_letter(response):
 
 def generate_ming_response(messages, processor, model):
     """
-    使用Ming-omni模型生成响应
+    Generate response using Ming-omni model
     """
     try:
         # 1. Format inputs using chat template
@@ -120,7 +124,7 @@ def generate_ming_response(messages, processor, model):
         return output_text
         
     except Exception as e:
-        print(f"Ming模型推理错误: {e}")
+        print(f"Ming model inference error: {e}")
         raise e
 
 def filter_qa_pairs_by_duration(qa_pairs, max_duration):
@@ -133,41 +137,41 @@ def filter_qa_pairs_by_duration(qa_pairs, max_duration):
         elif duration is None:
             print(f"Warning: No duration data for video {qa_pair.get('video_path', 'Unknown')}, skipping.")
     
-    print(f"原始数据集: {len(qa_pairs)} 个QA对")
-    print(f"过滤后数据集 < {max_duration} 秒: {len(filtered_qa_pairs)} 个QA对")
+    print(f"Original dataset: {len(qa_pairs)} QA pairs")
+    print(f"Filtered dataset (< {max_duration} seconds): {len(filtered_qa_pairs)} QA pairs")
     return filtered_qa_pairs
 
 def write_result_to_file(result, output_file):
-    """将单个结果写入JSON文件"""
+    """Write single result to JSON file"""
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     
-    # 如果文件不存在，创建空列表
+    # Create empty list if file doesn't exist
     if not os.path.exists(output_file):
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump([], f, indent=2, ensure_ascii=False)
     
-    # 读取现有结果
+    # Read existing results
     try:
         with open(output_file, "r", encoding="utf-8") as f:
             existing_results = json.load(f)
     except (json.JSONDecodeError, FileNotFoundError):
         existing_results = []
     
-    # 添加新结果
+    # Add new result
     existing_results.append(result)
     
-    # 写回文件
+    # Write back to file
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(existing_results, f, indent=2, ensure_ascii=False)
 
 def evaluate_model(dataloader, model, processor, output_file, max_duration, max_frames=64):
-    """使用Ming-omni模型进行评估"""
-    # 使用filter_qa_pairs_by_duration过滤QA对
+    """Evaluate using Ming-omni model"""
+    # Filter QA pairs by duration
     qa_pairs = filter_qa_pairs_by_duration(dataloader.get_all_qa_pairs(), max_duration)
     
-    # 内存监控
-    print(f"开始评估，初始内存使用: {psutil.virtual_memory().percent}%")
-    print(f"过滤后的QA对数量: {len(qa_pairs)}")
+    # Memory monitoring
+    print(f"Starting evaluation, initial memory usage: {psutil.virtual_memory().percent}%")
+    print(f"Number of filtered QA pairs: {len(qa_pairs)}")
     torch.cuda.empty_cache()
     gc.collect()
 
@@ -180,14 +184,14 @@ def evaluate_model(dataloader, model, processor, output_file, max_duration, max_
         unique_id = item.get('unique_id', f"video_{idx}")
         video_name = os.path.basename(video_path)
         
-        print(f"\n处理第 {idx+1}/{len(qa_pairs)} 个视频: {video_name}")
+        print(f"\nProcessing video {idx+1}/{len(qa_pairs)}: {video_name}")
         
-        # 检查是否在黑名单中
+        # Check if in blacklist
         if video_path in PROBLEMATIC_VIDEOS:
-            print(f"跳过问题视频: {video_name}")
+            print(f"Skipping problematic video: {video_name}")
             continue
             
-        # 初始化结果对象
+        # Initialize result object
         result = {
             "unique_id": unique_id,
             "video": video_name,
@@ -199,13 +203,13 @@ def evaluate_model(dataloader, model, processor, output_file, max_duration, max_
             "is_correct": False
         }
 
-        # 处理选项格式
+        # Process options format
         options = item.get("options", [])
         options_text = "\n".join(options)
 
         if not os.path.exists(video_path):
-            print(f"视频不存在: {video_path}")
-            result["model_answer"] = f"Error: 视频文件不存在 - {video_path}"
+            print(f"Video not found: {video_path}")
+            result["model_answer"] = f"Error: Video file does not exist - {video_path}"
             write_result_to_file(result, output_file)
             error_count += 1
             continue
@@ -217,7 +221,7 @@ def evaluate_model(dataloader, model, processor, output_file, max_duration, max_
             print(f"question: {question}")
             print(f"correct_answer: {correct_answer}")
 
-            # 构建Ming-omni的消息格式
+            # Build Ming-omni message format
             question_prompt = (
                 "You are given a video. Based on the content of the video, answer the following question:\n\n"
                 f"Question:\n{question}\n\n"
@@ -227,7 +231,7 @@ def evaluate_model(dataloader, model, processor, output_file, max_duration, max_
                 "Mustn't give any other reason for can not choose!"
             )
 
-            # 构建Ming消息格式
+            # Build Ming message format
             messages = [
                 {
                     "role": "HUMAN",
@@ -238,13 +242,13 @@ def evaluate_model(dataloader, model, processor, output_file, max_duration, max_
                 },
             ]
 
-            # 模型推理，包含错误捕获
+            # Model inference with error handling
             try:
                 response = generate_ming_response(messages, processor, model)
                 
                 print(f"response: {response}")
 
-                # 使用正则表达式提取答案字母
+                # Extract answer letter using regex
                 extracted_answer = extract_answer_letter(response)
                 model_answer = extracted_answer if extracted_answer else response.strip()
                 
@@ -256,24 +260,24 @@ def evaluate_model(dataloader, model, processor, output_file, max_duration, max_
                 result["is_correct"] = is_correct
                 processed_count += 1
                 
-                # 统计正确答案数量
+                # Count correct answers
                 if is_correct:
                     correct_count += 1
                 
             except torch.cuda.OutOfMemoryError as oom_error:
                 error_msg = f"Error: OutOfMemoryError - CUDA out of memory. {str(oom_error)}"
-                print(f"CUDA内存不足: {oom_error}")
+                print(f"CUDA out of memory: {oom_error}")
                 result["model_answer"] = error_msg
                 result["is_correct"] = False
                 error_count += 1
                 
-                # 清理内存并继续
+                # Clean memory and continue
                 torch.cuda.empty_cache()
                 gc.collect()
                 
             except Exception as model_error:
                 error_msg = f"Error: {type(model_error).__name__} - {str(model_error)}"
-                print(f"模型推理错误: {model_error}")
+                print(f"Model inference error: {model_error}")
                 result["model_answer"] = error_msg
                 result["is_correct"] = False
                 PROBLEMATIC_VIDEOS.add(video_path)
@@ -281,38 +285,38 @@ def evaluate_model(dataloader, model, processor, output_file, max_duration, max_
 
         except Exception as e:
             error_msg = f"Error: {type(e).__name__} - {str(e)}"
-            print(f"处理视频 {video_name} 时发生错误: {e}")
+            print(f"Error processing video {video_name}: {e}")
             result["model_answer"] = error_msg
             result["is_correct"] = False
             PROBLEMATIC_VIDEOS.add(video_path)
             error_count += 1
         
-        # 写入结果到文件
+        # Write result to file
         write_result_to_file(result, output_file)
-        print(f"结果已写入: {result['unique_id']} - {result['model_answer'][:50]}...")
+        print(f"Result written: {result['unique_id']} - {result['model_answer'][:50]}...")
         
-        # 定期内存清理
-        if (idx + 1) % 5 == 0:  # 更频繁的清理
+        # Periodic memory cleanup
+        if (idx + 1) % 5 == 0:  # More frequent cleanup
             torch.cuda.empty_cache()
             gc.collect()
             memory_percent = psutil.virtual_memory().percent
-            print(f"第{idx+1}个视频处理完成，当前内存使用: {memory_percent}%")
+            print(f"Completed video {idx+1}, current memory usage: {memory_percent}%")
             
-            # 如果内存使用过高，强制清理
+            # Force cleanup if memory usage is too high
             if memory_percent > 85:
-                print("内存使用过高，执行强制清理...")
+                print("Memory usage too high, forcing cleanup...")
                 torch.cuda.empty_cache()
                 gc.collect()
     
-    # 计算准确率
+    # Calculate accuracy
     accuracy = correct_count / processed_count if processed_count > 0 else 0.0
     
-    print(f"\n评估完成!")
-    print(f"成功处理: {processed_count} 个视频")
-    print(f"正确回答: {correct_count} 个")
-    print(f"错误数量: {error_count} 个")
-    print(f"问题视频数量: {len(PROBLEMATIC_VIDEOS)}")
-    print(f"准确率 (Accuracy): {accuracy:.4f} ({accuracy*100:.2f}%)")
+    print(f"\nEvaluation completed!")
+    print(f"Successfully processed: {processed_count} videos")
+    print(f"Correct answers: {correct_count}")
+    print(f"Errors: {error_count}")
+    print(f"Problematic videos: {len(PROBLEMATIC_VIDEOS)}")
+    print(f"Accuracy: {accuracy:.4f} ({accuracy*100:.2f}%)")
     
     return {
         "total_processed": processed_count,
@@ -326,12 +330,12 @@ if __name__ == "__main__":
 
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_json_file", type=str, default="/root/siton-tmp/code/omni-bench/final_data/out.json")
-    parser.add_argument("--video_dir", type=str, default="/root/siton-tmp/omni-videos/omni_videos_v3")
-    parser.add_argument("--output_file", type=str, default="/root/siton-tmp/code/omni-bench/eval_results/ming_omni_out.json")
-    parser.add_argument("--model_path", type=str, default="/root/siton-tmp/code/models/Ming-Lite-Omni-1.5")
-    parser.add_argument("--max_duration", type=int, default=6000)
-    parser.add_argument("--max_frames", type=int, default=128) # 参考原论文的设置
+    parser.add_argument("--data_json_file", type=str, required=True, help="Path to the data JSON file")
+    parser.add_argument("--video_dir", type=str, required=True, help="Directory containing video files")
+    parser.add_argument("--output_file", type=str, default="./eval_results/ming_omni_out.json", help="Output file path for evaluation results")
+    parser.add_argument("--model_path", default="Ming-Lite-Omni-1.5",type=str, required=True, help="Path to the Ming-Lite-Omni model")
+    parser.add_argument("--max_duration", type=int, default=6000, help="Maximum video duration in seconds")
+    parser.add_argument("--max_frames", type=int, default=128, help="Maximum number of frames to extract from video")
     args = parser.parse_args()
 
     data_json_file = args.data_json_file
@@ -343,8 +347,8 @@ if __name__ == "__main__":
     
     dataloader = VideoQADaloader(data_json_file, video_dir)
     
-    # 加载Ming-omni模型
-    print("正在加载 Ming-omni 模型...")
+    # Load Ming-omni model
+    print("Loading Ming-omni model...")
     
     # def init_distributed():
     #     if not dist.is_initialized():
@@ -353,30 +357,30 @@ if __name__ == "__main__":
     #         dist.init_process_group(backend="nccl")
     #     return int(os.environ.get("LOCAL_RANK", 0))
 
-    # # 初始化分布式，再加载模型
+    # # Initialize distributed, then load model
     # local_rank = init_distributed()
     
-    # 加载Ming-omni模型
+    # Load Ming-omni model
     model = BailingMMNativeForConditionalGeneration.from_pretrained(
         model_path,
         torch_dtype=torch.bfloat16,
         attn_implementation="flash_attention_2",
-        load_image_gen=False,  # 不需要图像生成功能
+        load_image_gen=False,  # Don't need image generation feature
         low_cpu_mem_usage=True,
         device_map="auto"
     ).eval()
     
-    # print(f"模型设备映射: {model.hf_device_map}")
+    # print(f"Model device map: {model.hf_device_map}")
     
-    # 加载处理器
+    # Load processor
     processor = AutoProcessor.from_pretrained(
         model_path, 
         trust_remote_code=True
     )
     
-    print("模型加载完成，开始评估...")
+    print("Model loaded, starting evaluation...")
     
-    # 直接在evaluate_model中处理结果写入
+    # Process result writing directly in evaluate_model
     eval_results = evaluate_model(
         dataloader, 
         model, 
@@ -386,8 +390,8 @@ if __name__ == "__main__":
         max_frames=max_frames
     )
 
-    print(f"\n评测完成，结果已实时保存到 {output_file}")
-    print(f"最终统计结果:")
-    print(f"  - 总处理数量: {eval_results['total_processed']}")
-    print(f"  - 正确回答数: {eval_results['correct_answers']}")
-    print(f"  - 最终准确率: {eval_results['accuracy']:.4f} ({eval_results['accuracy']*100:.2f}%)")
+    print(f"\nEvaluation completed, results saved to {output_file}")
+    print(f"Final statistics:")
+    print(f"  - Total processed: {eval_results['total_processed']}")
+    print(f"  - Correct answers: {eval_results['correct_answers']}")
+    print(f"  - Final accuracy: {eval_results['accuracy']:.4f} ({eval_results['accuracy']*100:.2f}%)")

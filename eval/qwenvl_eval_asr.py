@@ -15,13 +15,11 @@ from transformers import Qwen2_5_VLForConditionalGeneration, AutoTokenizer, Auto
 #from qwen_vl_utils import process_vision_info
 import sys
 
-# sys.path.append("../../")
-sys.path.append("/root/siton-tmp/code/omni-bench")
+# Add project root to path for relative imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)
+sys.path.insert(0, project_root)
 from dataloader import VideoQADaloader
-
-
-# sys.path.append("../../utils/")
-sys.path.append("/root/siton-tmp/code/omni-bench")
 
 from utils.vl_vision_process import process_vision_info
 
@@ -286,7 +284,9 @@ def process_single_qa_pair(qa_pair, model, processor, processed_ids):
                 asr_text_to_add = ""
                 try:
                     video_base = os.path.splitext(os.path.basename(video_path))[0]
-                    asr_path = f"/root/siton-tmp/code/asr/asr_results/{video_base}.txt"
+                    # ASR path should be provided as an environment variable or command line argument
+                    asr_dir = os.environ.get("ASR_RESULTS_DIR", "./asr_results")
+                    asr_path = os.path.join(asr_dir, f"{video_base}.txt")
                     if os.path.exists(asr_path):
                         with open(asr_path, "r", encoding="utf-8") as f:
                             asr_text_to_add = f.read().strip()
@@ -509,16 +509,17 @@ def run_qwenvl_evaluation(data_json_file: str, video_dir: str, model_name: str, 
 #     print_final_results(results, max_duration, output_file)
 
 if __name__ == "__main__":
-    task_name = "6000_second_batch"
-    # base_dir = "/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/code/omni-bench"
-    # data_json_file=f"{base_dir}/data/merged_qas_1_0817.json"
-    data_json_file = "/root/siton-tmp/code/omni-bench/final_data/qa_data.json"
-    video_dir="/root/siton-tmp/omni-videos/omni_videos_v3"
+    import argparse
+    parser = argparse.ArgumentParser(description="Evaluate Qwen-VL model with ASR on video QA dataset")
+    parser.add_argument("--data_json_file", type=str, required=True, help="Path to the data JSON file")
+    parser.add_argument("--video_dir", type=str, required=True, help="Directory containing video files")
+    parser.add_argument("--model_path", type=str, required=True, help="Path to the Qwen-VL model")
+    parser.add_argument("--output_file", type=str, default="./eval_results/qwen_vl_asr_output.json", help="Output file path for evaluation results")
+    parser.add_argument("--max_duration", type=int, default=6000, help="Maximum video duration in seconds")
+    parser.add_argument("--asr_results_dir", type=str, default="./asr_results", help="Directory containing ASR result files")
+    args = parser.parse_args()
     
-    model_name = "/root/siton-tmp/code/models/Qwen_Qwen2.5-VL-72B-Instruct"
-    model_basename = os.path.basename(model_name)
-    output_file = f"/root/siton-tmp/code/omni-bench/eval_results/qwen_vl_72B_ASR_qa_data.json"  
-
-    max_duration = 6000
+    # Set ASR directory as environment variable for use in process_single_qa_pair
+    os.environ["ASR_RESULTS_DIR"] = args.asr_results_dir
     
-    run_qwenvl_evaluation(data_json_file, video_dir, model_name, output_file, max_duration)
+    run_qwenvl_evaluation(args.data_json_file, args.video_dir, args.model_path, args.output_file, args.max_duration)

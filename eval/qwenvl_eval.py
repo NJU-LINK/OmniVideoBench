@@ -15,13 +15,11 @@ from transformers import Qwen2_5_VLForConditionalGeneration, AutoTokenizer, Auto
 #from qwen_vl_utils import process_vision_info
 import sys
 
-# sys.path.append("../../")
-sys.path.append("/root/siton-tmp/code/omni-bench")
+# Add project root to path for relative imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)
+sys.path.insert(0, project_root)
 from dataloader import VideoQADaloader
-
-
-# sys.path.append("../../utils/")
-sys.path.append("/root/siton-tmp/code/omni-bench")
 
 from utils.vl_vision_process import process_vision_info
 
@@ -456,16 +454,13 @@ def run_qwenvl_evaluation(data_json_file: str, video_dir: str, model_name: str, 
 #     print_final_results(results, max_duration, output_file)
 
 if __name__ == "__main__":
-    task_name = "6000_second_batch"
-    # base_dir = "/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/code/omni-bench"
-    # data_json_file=f"{base_dir}/data/merged_qas_1_0817.json"
-    data_json_file = "/root/siton-tmp/code/omni-bench/final_data/qa_data.json"
-    video_dir="/root/siton-tmp/omni-videos/omni_videos_v3"
+    import argparse
+    parser = argparse.ArgumentParser(description="Evaluate Qwen-VL model on video QA dataset")
+    parser.add_argument("--data_json_file", type=str, required=True, help="Path to the data JSON file")
+    parser.add_argument("--video_dir", type=str, required=True, help="Directory containing video files")
+    parser.add_argument("--model_path", type=str, required=True, help="Path to the Qwen-VL model")
+    parser.add_argument("--output_file", type=str, default="./eval_results/qwen_vl_output.json", help="Output file path for evaluation results")
+    parser.add_argument("--max_duration", type=int, default=6000, help="Maximum video duration in seconds")
+    args = parser.parse_args()
     
-    model_name = "/root/siton-tmp/code/models/Qwen_Qwen2.5-VL-72B-Instruct"
-    model_basename = os.path.basename(model_name)
-    output_file = f"/root/siton-tmp/code/omni-bench/eval_results/qwen_vl_72B_qa_data.json"
-
-    max_duration = 6000
-    
-    run_qwenvl_evaluation(data_json_file, video_dir, model_name, output_file, max_duration)
+    run_qwenvl_evaluation(args.data_json_file, args.video_dir, args.model_path, args.output_file, args.max_duration)
