@@ -6,11 +6,8 @@
 
  Evaluation for Omni MLLMs</h1>
 <p align="center">
-  <a href="https://njulink.github.io/OmniVideoBench/">
+  <a href="https://omnivideobench.github.io/omnivideobench_home/">
     <img src="https://img.shields.io/badge/🌐%20Homepage-njulink.github.io/OmniVideoBench-blue.svg" alt="Homepage">
-  </a>
-  <a href="https://huggingface.co/datasets/NJU-LINK/OmniVideoBench">
-    <img src="https://img.shields.io/badge/🤗%20Dataset-HuggingFace-yellow.svg" alt="HuggingFace Dataset">
   </a>
   <!-- <a href="https://arxiv.org/abs/2510.12345">
     <img src="https://img.shields.io/badge/Paper-ArXiv-red.svg" alt="Arxiv Paper">
