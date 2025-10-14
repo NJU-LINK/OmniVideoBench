@@ -83,47 +83,6 @@ def create_result_template(qa_pair):
         'is_correct': False,
     }
 
-# def get_prompt(question):
-#     text_prompt = f"""### Instruction
-#     Here is a question about the video below, please follow these steps:
-#     1.  First, provide a step-by-step reasoning of your thought process.
-#     2.  Then, provide the final, concise answer based on your reasoning.
-
-#     ### Question
-#     {question}
-
-#     ### Answer format
-#     **Reasoning**:
-#     1. [Step 1 of your reasoning]
-#     2. [Step 2 of your reasoning]
-#     3. [...]
-
-#     **Final Answer**: [Your final and concise answer]"""
-#     return text_prompt
-
-# def build_conversation(video_path, question, options):
-#     """Build conversation format for the model."""
-#     # options_text = "\n".join(options)
-#     prompt = get_prompt(question)
-
-#     conversation = [
-#         {
-#             "role": "system",
-#             "content": [
-#                 {"type": "text", "text": "You are Qwen, a virtual human developed by the Qwen Team, Alibaba Group, capable of perceiving auditory and visual inputs, as well as generating text and speech."}
-#             ],
-#         },
-#         {
-#             "role": "user",
-#             "content": [
-#                 {"type": "video", "video": video_path},
-#                 {"type": "text", "text": prompt}
-#             ]
-#         }
-#     ]
-    
-#     return conversation, prompt
-
 def build_conversation(video_path, question, options):
     """Build conversation format for the model."""
     options_text = "\n".join(options)
