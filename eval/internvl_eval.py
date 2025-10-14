@@ -18,7 +18,10 @@ from transformers import AutoModel, AutoTokenizer
 import random
 
 import sys
-sys.path.append("/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/code/omni-bench")
+# Add project root to path for relative imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)
+sys.path.insert(0, project_root)
 from dataloader import VideoQADaloader
 
 import torch.distributed as dist
@@ -26,7 +29,7 @@ import torch.distributed as dist
 # dist.init_process_group(backend="nccl")
 # torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
 
-# 设置环境变量
+# Set environment variables
 os.environ['TRANSFORMERS_OFFLINE'] = '1'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0, 1, 2, 3'
 # os.environ['MASTER_ADDR'] = 'localhost'
@@ -47,20 +50,20 @@ def set_seed(seed: int = 42):
 
 set_seed(42)
 
-# 添加问题视频黑名单
+# Add problematic videos blacklist
 PROBLEMATIC_VIDEOS = set()
 
 def extract_answer_letter(response):
     """
-    使用正则表达式从模型回答中提取答案字母 (A, B, C, D)
+    Extract answer letter (A, B, C, D) from model response using regex
     """
     if not response:
         return ""
     
-    # 清理回答文本
+    # Clean response text
     response = response.strip()
     
-    # 尝试多种正则模式来提取答案
+    # Try multiple regex patterns to extract answer
     patterns = [
         r'^([ABCD])\.?\s*',  # Starts with A. or A
         r'([ABCD])\.?\s*$',  # Ends with A. or A
@@ -76,7 +79,7 @@ def extract_answer_letter(response):
         if match:
             return match.group(1).upper()
     
-    # 如果没有找到，返回原始回答的第一个字符（如果是A-D）
+    # If not found, return the first character of original response (if A-D)
     first_char = response[0].upper() if response else ""
     if first_char in ['A', 'B', 'C', 'D']:
         return first_char
@@ -84,37 +87,37 @@ def extract_answer_letter(response):
     return ""
 
 def load_video_opencv(video_path, bound=None, input_size=448, max_num=1, num_segments=32):
-    """使用OpenCV加载视频的备选方案"""
+    """Alternative video loading using OpenCV"""
     try:
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
-            raise Exception(f"OpenCV无法打开视频: {video_path}")
+            raise Exception(f"OpenCV cannot open video: {video_path}")
         
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         fps = cap.get(cv2.CAP_PROP_FPS)
         
-        print(f'视频总帧数: {total_frames}, FPS: {fps}')
+        print(f'Total video frames: {total_frames}, FPS: {fps}')
         
-        # 计算帧索引
+        # Calculate frame indices
         frame_indices = get_index(bound, fps, total_frames - 1, first_idx=0, num_segments=num_segments)
         
         pixel_values_list, num_patches_list = [], []
         transform = build_transform(input_size=input_size)
         
         for frame_index in frame_indices:
-            # 设置帧位置
+            # Set frame position
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
             ret, frame = cap.read()
             
             if not ret:
-                print(f"无法读取帧 {frame_index}, 跳过")
+                print(f"Cannot read frame {frame_index}, skipping")
                 continue
                 
-            # 转换颜色空间 BGR -> RGB
+            # Convert color space BGR -> RGB
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             img = Image.fromarray(frame_rgb)
             
-            # 动态预处理
+            # Dynamic preprocessing
             img = dynamic_preprocess(img, image_size=input_size, use_thumbnail=True, max_num=max_num)
             pixel_values = [transform(tile) for tile in img]
             pixel_values = torch.stack(pixel_values)
@@ -124,15 +127,15 @@ def load_video_opencv(video_path, bound=None, input_size=448, max_num=1, num_seg
         cap.release()
         
         if not pixel_values_list:
-            raise Exception("未能成功读取任何视频帧")
+            raise Exception("Failed to read any video frames")
             
         pixel_values = torch.cat(pixel_values_list)
         
-        print(f'提取了 {len(frame_indices)} 帧，总图片块数: {pixel_values.shape[0]}')
+        print(f'Extracted {len(frame_indices)} frames, total image patches: {pixel_values.shape[0]}')
         return pixel_values, num_patches_list
         
     except Exception as e:
-        print(f"OpenCV视频加载失败: {e}")
+        print(f"OpenCV video loading failed: {e}")
         raise e
 
 def build_transform(input_size):
@@ -213,14 +216,14 @@ def get_index(bound, fps, max_frame, first_idx=0, num_segments=32):
     return frame_indices
 
 def load_video(video_path, bound=None, input_size=448, max_num=1, num_segments=32):
-    """加载视频并提取帧，支持DECORD和OpenCV备选方案"""
+    """Load video and extract frames, supports DECORD and OpenCV alternatives"""
     try:
-        # 首先尝试使用DECORD
+        # First try using DECORD
         vr = VideoReader(video_path, ctx=cpu(0), num_threads=1)
         max_frame = len(vr) - 1
         fps = float(vr.get_avg_fps())
         
-        print(f'视频总帧数: {max_frame + 1}, FPS: {fps}')
+        print(f'Total video frames: {max_frame + 1}, FPS: {fps}')
 
         pixel_values_list, num_patches_list = [], []
         transform = build_transform(input_size=input_size)
@@ -235,31 +238,31 @@ def load_video(video_path, bound=None, input_size=448, max_num=1, num_segments=3
             pixel_values_list.append(pixel_values)
         pixel_values = torch.cat(pixel_values_list)
         
-        print(f'提取了 {len(frame_indices)} 帧，总图片块数: {pixel_values.shape[0]}')
+        print(f'Extracted {len(frame_indices)} frames, total image patches: {pixel_values.shape[0]}')
         return pixel_values, num_patches_list
         
     except Exception as decord_error:
-        print(f"DECORD加载失败: {decord_error}")
+        print(f"DECORD loading failed: {decord_error}")
         
-        # 检查是否是特定的DECORD错误
+        # Check if it's a specific DECORD error
         error_msg = str(decord_error)
-        if ("cannot find video stream" in error_msg or 
-            "DECORDError" in error_msg or 
+        if ("cannot find video stream" in error_msg or
+            "DECORDError" in error_msg or
             "Invalid NAL unit size" in error_msg or
             "Error splitting the input into NAL units" in error_msg or
             "Error sending packet" in error_msg or
             "avcodec_send_packet" in error_msg or
-            "DECORD加载失败" in error_msg):
+            "DECORD loading failed" in error_msg):
             
-            print("检测到DECORD兼容性问题，尝试使用OpenCV备选方案...")
+            print("Detected DECORD compatibility issue, trying OpenCV alternative...")
             try:
                 return load_video_opencv(video_path, bound, input_size, max_num, num_segments)
             except Exception as opencv_error:
-                print(f"OpenCV备选方案也失败: {opencv_error}")
-                # 抛出原始的DECORD错误，保持错误信息的一致性
+                print(f"OpenCV alternative also failed: {opencv_error}")
+                # Throw original DECORD error to maintain error message consistency
                 raise decord_error
         else:
-            # 对于其他类型的错误，直接抛出
+            # For other types of errors, throw directly
             raise decord_error
 
 def filter_qa_pairs_by_duration(qa_pairs, max_duration):
@@ -272,41 +275,41 @@ def filter_qa_pairs_by_duration(qa_pairs, max_duration):
         elif duration is None:
             print(f"Warning: No duration data for video {qa_pair.get('video_path', 'Unknown')}, skipping.")
     
-    print(f"原始数据集: {len(qa_pairs)} 个QA对")
-    print(f"过滤后数据集 < {max_duration} 秒: {len(filtered_qa_pairs)} 个QA对")
+    print(f"Original dataset: {len(qa_pairs)} QA pairs")
+    print(f"Filtered dataset < {max_duration} seconds: {len(filtered_qa_pairs)} QA pairs")
     return filtered_qa_pairs
 
 def write_result_to_file(result, output_file):
-    """将单个结果写入JSON文件"""
+    """Write single result to JSON file"""
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     
-    # 如果文件不存在，创建空列表
+    # If file doesn't exist, create empty list
     if not os.path.exists(output_file):
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump([], f, indent=2, ensure_ascii=False)
     
-    # 读取现有结果
+    # Read existing results
     try:
         with open(output_file, "r", encoding="utf-8") as f:
             existing_results = json.load(f)
     except (json.JSONDecodeError, FileNotFoundError):
         existing_results = []
     
-    # 添加新结果
+    # Add new result
     existing_results.append(result)
     
-    # 写回文件
+    # Write back to file
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(existing_results, f, indent=2, ensure_ascii=False)
 
 def evaluate_model(dataloader, model, tokenizer, output_file, max_duration, num_segments=8, max_num=1):
-    """使用InternVL模型进行评估"""
-    # 使用filter_qa_pairs_by_duration过滤QA对
+    """Evaluate using InternVL model"""
+    # Use filter_qa_pairs_by_duration to filter QA pairs
     qa_pairs = filter_qa_pairs_by_duration(dataloader.get_all_qa_pairs(), max_duration)
     
-    # 内存监控
-    print(f"开始评估，初始内存使用: {psutil.virtual_memory().percent}%")
-    print(f"过滤后的QA对数量: {len(qa_pairs)}")
+    # Memory monitoring
+    print(f"Starting evaluation, initial memory usage: {psutil.virtual_memory().percent}%")
+    print(f"Filtered QA pairs count: {len(qa_pairs)}")
     torch.cuda.empty_cache()
     gc.collect()
 
@@ -320,14 +323,14 @@ def evaluate_model(dataloader, model, tokenizer, output_file, max_duration, num_
         unique_id = item.get('unique_id', f"video_{idx}")
         video_name = os.path.basename(video_path)
         
-        print(f"\n处理第 {idx+1}/{len(qa_pairs)} 个视频: {video_name}")
+        print(f"\nProcessing video {idx+1}/{len(qa_pairs)}: {video_name}")
         
-        # 检查是否在黑名单中
+        # Check if in blacklist
         if video_path in PROBLEMATIC_VIDEOS:
-            print(f"跳过问题视频: {video_name}")
+            print(f"Skipping problematic video: {video_name}")
             continue
             
-        # 初始化结果对象
+        # Initialize result object
         result = {
             "unique_id": unique_id,
             "video": video_name,
@@ -339,44 +342,44 @@ def evaluate_model(dataloader, model, tokenizer, output_file, max_duration, num_
             "is_correct": False
         }
 
-        # 处理选项格式
+        # Process options format
         options = item.get("options", [])
         options_text = "\n".join(options)
 
         if not os.path.exists(video_path):
-            print(f"视频不存在: {video_path}")
-            result["model_answer"] = f"Error: 视频文件不存在 - {video_path}"
+            print(f"Video does not exist: {video_path}")
+            result["model_answer"] = f"Error: Video file does not exist - {video_path}"
             write_result_to_file(result, output_file)
             error_count += 1
             continue
 
         try:
-            # 加载视频并提取帧
+            # Load video and extract frames
             pixel_values, num_patches_list = load_video(
-                video_path, 
-                num_segments=num_segments, 
+                video_path,
+                num_segments=num_segments,
                 max_num=max_num
             )
             pixel_values = pixel_values.to(torch.bfloat16).cuda()
             
-            # 验证内容完整性
+            # Validate content integrity
             if pixel_values.size(0) == 0:
-                print(f"视频内容提取失败，跳过: {video_name}")
-                result["model_answer"] = "Error: 视频内容提取失败"
+                print(f"Video content extraction failed, skipping: {video_name}")
+                result["model_answer"] = "Error: Video content extraction failed"
                 write_result_to_file(result, output_file)
                 PROBLEMATIC_VIDEOS.add(video_path)
                 error_count += 1
                 continue
             
-            print(f"视频处理完成: {pixel_values.shape[0]} 个图片块")
+            print(f"Video processing completed: {pixel_values.shape[0]} image patches")
 
             question = item.get("question")
-            correct_answer = item.get("answer")  # 修复：使用 "answer" 而不是 "correct_option"
-            #TODO: 删除
+            correct_answer = item.get("answer")  # Fix: use "answer" instead of "correct_option"
+            #TODO: Remove
             print(f"question: {question}")
             print(f"correct_answer: {correct_answer}")
 
-            # 构建视频前缀
+            # Build video prefix
             video_prefix = ''.join([f'Frame{i+1}: <image>\n' for i in range(len(num_patches_list))])
             
             question_prompt = (
@@ -389,19 +392,19 @@ def evaluate_model(dataloader, model, tokenizer, output_file, max_duration, num_
                 "Mustn't give any other reason for can not choose!"
             )
 
-            # 模型推理，包含错误捕获
+            # Model inference with error handling
             try:
                 response = model.chat(
-                    tokenizer, 
-                    pixel_values, 
-                    question_prompt, 
+                    tokenizer,
+                    pixel_values,
+                    question_prompt,
                     generation_config,
                     num_patches_list=num_patches_list
                 )
                 
                 print(f"response: {response}")
 
-                # 使用正则表达式提取答案字母
+                # Use regex to extract answer letter
                 extracted_answer = extract_answer_letter(response)
                 model_answer = extracted_answer if extracted_answer else response.strip()
                 
@@ -413,24 +416,24 @@ def evaluate_model(dataloader, model, tokenizer, output_file, max_duration, num_
                 result["is_correct"] = is_correct
                 processed_count += 1
                 
-                # 统计正确答案数量
+                # Count correct answers
                 if is_correct:
                     correct_count += 1
                 
             except torch.cuda.OutOfMemoryError as oom_error:
                 error_msg = f"Error: OutOfMemoryError - CUDA out of memory. {str(oom_error)}"
-                print(f"CUDA内存不足: {oom_error}")
+                print(f"CUDA out of memory: {oom_error}")
                 result["model_answer"] = error_msg
                 result["is_correct"] = False
                 error_count += 1
                 
-                # 清理内存并继续
+                # Clean memory and continue
                 torch.cuda.empty_cache()
                 gc.collect()
                 
             except Exception as model_error:
                 error_msg = f"Error: {type(model_error).__name__} - {str(model_error)}"
-                print(f"模型推理错误: {model_error}")
+                print(f"Model inference error: {model_error}")
                 result["model_answer"] = error_msg
                 result["is_correct"] = False
                 PROBLEMATIC_VIDEOS.add(video_path)
@@ -438,38 +441,38 @@ def evaluate_model(dataloader, model, tokenizer, output_file, max_duration, num_
 
         except Exception as e:
             error_msg = f"Error: {type(e).__name__} - {str(e)}"
-            print(f"处理视频 {video_name} 时发生错误: {e}")
+            print(f"Error processing video {video_name}: {e}")
             result["model_answer"] = error_msg
             result["is_correct"] = False
             PROBLEMATIC_VIDEOS.add(video_path)
             error_count += 1
         
-        # 写入结果到文件
+        # Write result to file
         write_result_to_file(result, output_file)
-        print(f"结果已写入: {result['unique_id']} - {result['model_answer'][:50]}...")
+        print(f"Result written: {result['unique_id']} - {result['model_answer'][:50]}...")
         
-        # 定期内存清理
-        if (idx + 1) % 5 == 0:  # 更频繁的清理
+        # Regular memory cleanup
+        if (idx + 1) % 5 == 0:  # More frequent cleanup
             torch.cuda.empty_cache()
             gc.collect()
             memory_percent = psutil.virtual_memory().percent
-            print(f"第{idx+1}个视频处理完成，当前内存使用: {memory_percent}%")
+            print(f"Video {idx+1} processed, current memory usage: {memory_percent}%")
             
-            # 如果内存使用过高，强制清理
+            # Force cleanup if memory usage is too high
             if memory_percent > 85:
-                print("内存使用过高，执行强制清理...")
+                print("Memory usage too high, performing forced cleanup...")
                 torch.cuda.empty_cache()
                 gc.collect()
     
-    # 计算准确率
+    # Calculate accuracy
     accuracy = correct_count / processed_count if processed_count > 0 else 0.0
     
-    print(f"\n评估完成!")
-    print(f"成功处理: {processed_count} 个视频")
-    print(f"正确回答: {correct_count} 个")
-    print(f"错误数量: {error_count} 个")
-    print(f"问题视频数量: {len(PROBLEMATIC_VIDEOS)}")
-    print(f"准确率 (Accuracy): {accuracy:.4f} ({accuracy*100:.2f}%)")
+    print(f"\nEvaluation completed!")
+    print(f"Successfully processed: {processed_count} videos")
+    print(f"Correct answers: {correct_count}")
+    print(f"Error count: {error_count}")
+    print(f"Problematic videos count: {len(PROBLEMATIC_VIDEOS)}")
+    print(f"Accuracy: {accuracy:.4f} ({accuracy*100:.2f}%)")
     
     return {
         "total_processed": processed_count,
@@ -483,13 +486,13 @@ if __name__ == "__main__":
 
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_json_file", type=str, default="/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/code/omni-bench/final_data/out.json")
-    parser.add_argument("--video_dir", type=str, default="/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/omni_videos_v1")
-    parser.add_argument("--output_file", type=str, default="/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/code/omni-bench/eval_results/internvl_38b_128frames_out.json")
-    parser.add_argument("--model_path", type=str, default="/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/code/models/InternVL3_5-38B")
-    parser.add_argument("--max_duration", type=int, default=6000)
-    parser.add_argument("--num_segments", type=int, default=128)
-    parser.add_argument("--max_num", type=int, default=1)
+    parser.add_argument("--data_json_file", type=str, required=True, help="Path to the data JSON file")
+    parser.add_argument("--video_dir", type=str, required=True, help="Path to the video directory")
+    parser.add_argument("--output_file", type=str, required=True, help="Path to the output JSON file")
+    parser.add_argument("--model_path", type=str, required=True, help="Path to the model directory")
+    parser.add_argument("--max_duration", type=int, default=6000, help="Maximum video duration in seconds")
+    parser.add_argument("--num_segments", type=int, default=128, help="Number of video segments")
+    parser.add_argument("--max_num", type=int, default=1, help="Maximum number of frames")
     args = parser.parse_args()
 
     data_json_file = args.data_json_file
@@ -502,34 +505,17 @@ if __name__ == "__main__":
     
     dataloader = VideoQADaloader(data_json_file, video_dir)
     
-    # 加载InternVL模型
-    print("正在加载 InternVL 模型...")
-    
-    # 在分布式环境中避免使用device_map="auto"，改为手动指定设备
-    # if dist.is_initialized():
-    #     # 分布式环境：使用当前进程的GPU
-    #     device = f"cuda:{local_rank}"
-    #     model = AutoModel.from_pretrained(
-    #         model_path,
-    #         torch_dtype=torch.bfloat16,
-    #         load_in_8bit=False,
-    #         low_cpu_mem_usage=True,
-    #         use_flash_attn=True,
-    #         trust_remote_code=True,
-    #         device_map={"": device}  # 手动指定设备映射
-    #     ).eval()
-    # else:
-    #     # 非分布式环境：可以使用auto或手动指定
-    #     try:
+    # Load InternVL model
+    print("Loading InternVL model...")
     def init_distributed():
         if not dist.is_initialized():
-            local_rank = int(os.environ.get("LOCAL_RANK", 0))  # 由accelerate自动设置为0/1（2卡）
-            torch.cuda.set_device(local_rank)  # 绑定当前进程到对应GPU
-            # 初始化进程组（backend用nccl，适合GPU间通信）
+            local_rank = int(os.environ.get("LOCAL_RANK", 0))  # Automatically set to 0/1 by accelerate (2 GPUs)
+            torch.cuda.set_device(local_rank)  # Bind current process to corresponding GPU
+            # Initialize process group (backend uses nccl, suitable for GPU communication)
             dist.init_process_group(backend="nccl")
         return int(os.environ.get("LOCAL_RANK", 0))
 
-    # 2. 先初始化分布式，再加载模型
+    # 2. First initialize distributed, then load model
     local_rank = init_distributed()
     model = AutoModel.from_pretrained(
         model_path,
@@ -541,42 +527,28 @@ if __name__ == "__main__":
         device_map="auto"
         #device_map={"": local_rank}
     ).eval()
-    print(model.hf_device_map)
-        # except Exception as e:
-        #     print(f"使用device_map='auto'失败: {e}")
-        #     print("尝试手动指定设备...")
-        #     # 备选方案：手动指定到第一个GPU
-        #     model = AutoModel.from_pretrained(
-        #         model_path,
-        #         torch_dtype=torch.bfloat16,
-        #         load_in_8bit=False,
-        #         low_cpu_mem_usage=True,
-        #         use_flash_attn=True,
-        #         trust_remote_code=True,
-        #         device_map={"": "cuda:0"}
-        #     ).eval()
     
     tokenizer = AutoTokenizer.from_pretrained(
-        model_path, 
-        trust_remote_code=True, 
+        model_path,
+        trust_remote_code=True,
         use_fast=False
     )
     
-    print("模型加载完成，开始评估...")
+    print("Model loaded, starting evaluation...")
     
-    # 直接在evaluate_model中处理结果写入
+    # Directly handle result writing in evaluate_model
     eval_results = evaluate_model(
-        dataloader, 
-        model, 
-        tokenizer, 
-        output_file, 
+        dataloader,
+        model,
+        tokenizer,
+        output_file,
         max_duration,
         num_segments=num_segments,
         max_num=max_num
     )
 
-    print(f"\n评测完成，结果已实时保存到 {output_file}")
-    print(f"最终统计结果:")
-    print(f"  - 总处理数量: {eval_results['total_processed']}")
-    print(f"  - 正确回答数: {eval_results['correct_answers']}")
-    print(f"  - 最终准确率: {eval_results['accuracy']:.4f} ({eval_results['accuracy']*100:.2f}%)")
+    print(f"\nEvaluation completed, results saved to {output_file}")
+    print(f"Final statistics:")
+    print(f"  - Total processed: {eval_results['total_processed']}")
+    print(f"  - Correct answers: {eval_results['correct_answers']}")
+    print(f"  - Final accuracy: {eval_results['accuracy']:.4f} ({eval_results['accuracy']*100:.2f}%)")

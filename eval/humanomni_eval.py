@@ -38,13 +38,13 @@ set_seed(42)
 PROBLEMATIC_VIDEOS = set()
 
 def get_video_chunk_content(video_path, flatten=False):
-    """改进的视频内容提取函数，确保音频索引一致性"""
+    """Improved video content extraction function ensuring audio index consistency"""
     video = VideoFileClip(video_path)
     print('video_duration:', video.duration)
     
-    # 检查视频是否有音频轨道
+    # Check if the video has an audio track
     if video.audio is None:
-        print(f"警告: 视频 {video_path} 没有音频轨道")
+        print(f"Warning: Video {video_path} has no audio track")
         duration = video.duration
         sr = 16000
         audio_np = np.zeros(int(duration * sr), dtype=np.float32)
@@ -55,15 +55,15 @@ def get_video_chunk_content(video_path, flatten=False):
                 video.audio.write_audiofile(temp_audio_file_path, codec="pcm_s16le", fps=16000)
                 audio_np, sr = librosa.load(temp_audio_file_path, sr=16000, mono=True)
         except Exception as e:
-            print(f"音频提取失败: {e}，使用静默音频")
+            print(f"Audio extraction failed: {e}, using silent audio")
             duration = video.duration
             sr = 16000
             audio_np = np.zeros(int(duration * sr), dtype=np.float32)
     
-    # 确保音频长度与视频时长匹配
+    # Ensure audio length matches video duration
     expected_audio_length = int(video.duration * sr)
     if len(audio_np) != expected_audio_length:
-        print(f"音频长度调整: {len(audio_np)} -> {expected_audio_length}")
+        print(f"Audio length adjustment: {len(audio_np)} -> {expected_audio_length}")
         if len(audio_np) < expected_audio_length:
             audio_np = np.pad(audio_np, (0, expected_audio_length - len(audio_np)), mode='constant', constant_values=0)
         else:
@@ -71,46 +71,46 @@ def get_video_chunk_content(video_path, flatten=False):
     
     num_units = math.ceil(video.duration)
     
-    # 预先计算所有有效的音频段，确保索引一致性
+    # Pre-calculate all valid audio segments to ensure index consistency
     valid_segments = []
     for i in range(num_units):
         start_idx = sr * i
         end_idx = sr * (i + 1)
         
-        # 检查边界条件
+        # Check boundary conditions
         if start_idx >= len(audio_np):
-            print(f"警告: 第{i}段音频开始索引超出范围，跳过此段")
+            print(f"Warning: Audio segment {i} start index out of range, skipping")
             continue
             
         if end_idx > len(audio_np):
             available_audio = audio_np[start_idx:]
-            if len(available_audio) < sr * 0.1:  # 如果剩余音频太短，跳过
-                print(f"警告: 第{i}段剩余音频太短({len(available_audio)}样本)，跳过此段")
+            if len(available_audio) < sr * 0.1:  # If remaining audio is too short, skip
+                print(f"Warning: Audio segment {i} remaining audio too short ({len(available_audio)} samples), skipping")
                 continue
-            # 对于最后一段，调整end_idx到实际音频长度
+            # For the last segment, adjust end_idx to actual audio length
             end_idx = len(audio_np)
         
         valid_segments.append((i, start_idx, end_idx))
     
-    # 基于有效段生成内容
+    # Generate content based on valid segments
     contents = []
     for segment_idx, start_idx, end_idx in valid_segments:
         try:
-            # 获取帧
+            # Get frame
             frame_time = min(segment_idx + 1, video.duration - 0.001)
             frame = video.get_frame(frame_time)
             image = Image.fromarray((frame).astype(np.uint8))
             
-            # 提取音频段
+            # Extract audio segment
             audio = audio_np[start_idx:end_idx]
             
-            # 确保音频长度为1秒（16000样本），除了最后一段
+            # Ensure audio length is 1 second (16000 samples), except for the last segment
             if len(audio) < sr and segment_idx < num_units - 1:
                 audio = np.pad(audio, (0, sr - len(audio)), mode='constant', constant_values=0)
             elif len(audio) > sr:
                 audio = audio[:sr]
             
-            # 确保数据类型
+            # Ensure data type
             audio = audio.astype(np.float32)
             
             if flatten:
@@ -119,55 +119,55 @@ def get_video_chunk_content(video_path, flatten=False):
                 contents.append(["<unit>", image, audio])
                 
         except Exception as e:
-            print(f"处理第{segment_idx}段时出错: {e}")
-            # 如果单个段处理失败，整个视频标记为有问题
+            print(f"Error processing segment {segment_idx}: {e}")
+            # If a single segment fails, mark the entire video as problematic
             video.close()
             raise e
     
-    print(f"总共处理了 {len(valid_segments)} 个有效音频段，共 {num_units} 段")
+    print(f"Processed {len(valid_segments)} valid audio segments out of {num_units} total segments")
     
     video.close()
     return contents
 
 def write_result_to_file(result, output_file):
-    """将单个结果写入JSON文件"""
+    """Write single result to JSON file"""
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     
-    # 如果文件不存在，创建空列表
+    # If file doesn't exist, create empty list
     if not os.path.exists(output_file):
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump([], f, indent=2, ensure_ascii=False)
     
-    # 读取现有结果
+    # Read existing results
     try:
         with open(output_file, "r", encoding="utf-8") as f:
             existing_results = json.load(f)
     except (json.JSONDecodeError, FileNotFoundError):
         existing_results = []
     
-    # 添加新结果
+    # Add new result
     existing_results.append(result)
     
-    # 写回文件
+    # Write back to file
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(existing_results, f, indent=2, ensure_ascii=False)
 
 def evaluate_model(dataloader, model, tokenizer, output_file,max_duration):
-    """改进的模型评估函数，实时写入结果"""
+    """Improved model evaluation function with real-time result writing"""
 
-    # 使用filter_qa_pairs_by_duration过滤QA对
+    # Use filter_qa_pairs_by_duration to filter QA pairs
     qa_pairs = filter_qa_pairs_by_duration(dataloader.get_all_qa_pairs(),max_duration)
     
-    # 内存监控
-    print(f"开始评估，初始内存使用: {psutil.virtual_memory().percent}%")
-    print(f"过滤后的QA对数量: {len(qa_pairs)}")
+    # Memory monitoring
+    print(f"Starting evaluation, initial memory usage: {psutil.virtual_memory().percent}%")
+    print(f"Filtered QA pairs count: {len(qa_pairs)}")
     torch.cuda.empty_cache()
     gc.collect()
 
     processed_count = 0
     error_count = 0
 
-    # 回答正确的问题数目
+    # Number of correctly answered questions
     right_count = 0
 
     for idx, item in enumerate(qa_pairs):
@@ -175,14 +175,14 @@ def evaluate_model(dataloader, model, tokenizer, output_file,max_duration):
         unique_id = item.get('unique_id', f"video_{idx}")
         video_name = os.path.basename(video_path)
         
-        print(f"\n处理第 {idx+1}/{len(qa_pairs)} 个视频: {video_name}")
+        print(f"\nProcessing video {idx+1}/{len(qa_pairs)}: {video_name}")
         
-        # 检查是否在黑名单中
+        # Check if in blacklist
         if video_path in PROBLEMATIC_VIDEOS:
-            print(f"跳过问题视频: {video_name}")
+            print(f"Skipping problematic video: {video_name}")
             continue
             
-        # 初始化结果对象
+        # Initialize result object
         result = {
             "unique_id": unique_id,
             "video": video_name,
@@ -194,25 +194,25 @@ def evaluate_model(dataloader, model, tokenizer, output_file,max_duration):
             "is_correct": False
         }
 
-        # 处理选项格式
+        # Process options format
         options = item.get("options", [])
         options_text = "\n".join(options)
 
         if not os.path.exists(video_path):
-            print(f"视频不存在: {video_path}")
-            result["model_answer"] = f"Error: 视频文件不存在 - {video_path}"
+            print(f"Video does not exist: {video_path}")
+            result["model_answer"] = f"Error: Video file does not exist - {video_path}"
             write_result_to_file(result, output_file)
             error_count += 1
             continue
 
         try:
-            # --- HumanOmni 数据预处理 ---
-            # 使用HumanOmni的processor来处理视频和音频
-            # processor['video'] 和 processor['audio'] 直接接受文件路径
+            # --- HumanOmni data preprocessing ---
+            # Use HumanOmni's processor to handle video and audio
+            # processor['video'] and processor['audio'] directly accept file paths
             video_tensor = processor['video'](video_path)
-            audio_tensor = processor['audio'](video_path)[0] # processor['audio'] 返回 (tensor, sample_rate)
+            audio_tensor = processor['audio'](video_path)[0] # processor['audio'] returns (tensor, sample_rate)
 
-            # --- 构建Prompt ---
+            # --- Build Prompt ---
             question = item.get("question")
             options = item.get("options", [])
             correct_answer = item.get("answer")
@@ -227,7 +227,7 @@ def evaluate_model(dataloader, model, tokenizer, output_file,max_duration):
                 "Mustn't give any other reason for can not choose!"
             )
 
-            # ----Human Omni模型推理
+            # ----Human Omni model inference
             try:
                 output = mm_infer(
                     image_or_video=video_tensor,
@@ -236,7 +236,7 @@ def evaluate_model(dataloader, model, tokenizer, output_file,max_duration):
                     tokenizer=tokenizer,
                     audio=audio_tensor,
                     modal='video_audio',
-                    question=question, # mm_infer 需要 question 参数
+                    question=question, # mm_infer requires question parameter
                     bert_tokeni=bert_tokenizer,
                     do_sample=False,
                 )
@@ -254,18 +254,18 @@ def evaluate_model(dataloader, model, tokenizer, output_file,max_duration):
                 
             except torch.cuda.OutOfMemoryError as oom_error:
                 error_msg = f"Error: OutOfMemoryError - CUDA out of memory. {str(oom_error)}"
-                print(f"CUDA内存不足: {oom_error}")
+                print(f"CUDA out of memory: {oom_error}")
                 result["model_answer"] = error_msg
                 result["is_correct"] = False
                 error_count += 1
                 
-                # 清理内存并继续
+                # Clean memory and continue
                 torch.cuda.empty_cache()
                 gc.collect()
                 
             except AssertionError as ae:
-                error_msg = f"Error: AssertionError - 音频索引不匹配: {str(ae)}"
-                print(f"断言错误: {ae}")
+                error_msg = f"Error: AssertionError - Audio index mismatch: {str(ae)}"
+                print(f"Assertion error: {ae}")
                 result["model_answer"] = error_msg
                 result["is_correct"] = False
                 PROBLEMATIC_VIDEOS.add(video_path)
@@ -273,7 +273,7 @@ def evaluate_model(dataloader, model, tokenizer, output_file,max_duration):
                 
             except Exception as model_error:
                 error_msg = f"Error: {type(model_error).__name__} - {str(model_error)}"
-                print(f"模型推理错误: {model_error}")
+                print(f"Model inference error: {model_error}")
                 result["model_answer"] = error_msg
                 result["is_correct"] = False
                 PROBLEMATIC_VIDEOS.add(video_path)
@@ -281,34 +281,34 @@ def evaluate_model(dataloader, model, tokenizer, output_file,max_duration):
 
         except Exception as e:
             error_msg = f"Error: {type(e).__name__} - {str(e)}"
-            print(f"处理视频 {video_name} 时发生错误: {e}")
+            print(f"Error processing video {video_name}: {e}")
             result["model_answer"] = error_msg
             result["is_correct"] = False
             PROBLEMATIC_VIDEOS.add(video_path)
             error_count += 1
         
-        # 写入结果到文件
+        # Write result to file
         write_result_to_file(result, output_file)
-        print(f"结果已写入: {result['unique_id']} - {result['model_answer'][:50]}...")
+        print(f"Result written: {result['unique_id']} - {result['model_answer'][:50]}...")
         
-        # 定期内存清理
-        if (idx + 1) % 5 == 0:  # 更频繁的清理
+        # Periodic memory cleanup
+        if (idx + 1) % 5 == 0:  # More frequent cleanup
             torch.cuda.empty_cache()
             gc.collect()
             memory_percent = psutil.virtual_memory().percent
-            print(f"第{idx+1}个视频处理完成，当前内存使用: {memory_percent}%")
+            print(f"Video {idx+1} processed, current memory usage: {memory_percent}%")
             
-            # 如果内存使用过高，强制清理
+            # Force cleanup if memory usage is too high
             if memory_percent > 85:
-                print("内存使用过高，执行强制清理...")
+                print("Memory usage too high, performing forced cleanup...")
                 torch.cuda.empty_cache()
                 gc.collect()
     
-    print(f"\n评估完成!")
-    print(f"成功处理: {processed_count} 个视频")
-    print(f"错误数量: {error_count} 个")
-    print(f"问题视频数量: {len(PROBLEMATIC_VIDEOS)}")
-    print(f"正确率为：{( right_count / processed_count ) * 100: .2f}%")
+    print(f"\nEvaluation completed!")
+    print(f"Successfully processed: {processed_count} videos")
+    print(f"Error count: {error_count}")
+    print(f"Problematic videos count: {len(PROBLEMATIC_VIDEOS)}")
+    print(f"Accuracy: {( right_count / processed_count ) * 100: .2f}%")
 
 def parse_args():
     """Parse command line arguments"""

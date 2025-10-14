@@ -1,5 +1,6 @@
 
 
+import argparse
 import torch
 import json
 import os
@@ -14,21 +15,20 @@ from transformers import Qwen2_5OmniThinkerForConditionalGeneration, Qwen2_5Omni
 from qwen_omni_utils import process_mm_info
 import sys
 
-# 抑制不必要的警告
+# Suppress unnecessary warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
 warnings.filterwarnings("ignore", category=UserWarning, module="librosa")
 warnings.filterwarnings("ignore", category=UserWarning, module="qwen_omni_utils")
 warnings.filterwarnings("ignore", category=UserWarning, module="qwen_vl_utils")
 warnings.filterwarnings("ignore", category=FutureWarning, module="librosa")
 
-# sys.path.append("../../")
-sys.path.append("/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/code/omni-bench")
+# Add project root to path for relative imports
+import os
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)
+sys.path.insert(0, project_root)
+
 from dataloader import VideoQADaloader
-
-
-# sys.path.append("../../utils/")
-sys.path.append("/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/code/omni-bench/utils")
-
 from utils.utils import (
     # load_model_and_processor,
     clean_text,
@@ -39,7 +39,7 @@ from utils.utils import (
     handle_processing_error,
     set_seed
     )
-# 设置环境变量
+# Set environment variables
 os.environ['TRANSFORMERS_OFFLINE'] = '1'
 os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
@@ -110,13 +110,13 @@ def process_multimedia_input(conversation, processor):
     print("processing video...")
     audios, images, videos = process_mm_info(conversation, use_audio_in_video=USE_AUDIO_IN_VIDEO)
 
-    # TODO: 这里按照单卡上限对长视频进行采样，保持帧数不超过120
+    # TODO: Sample long videos according to single GPU limits, keep frames under 120
     # MAX_FRAMES=120
     MAX_FRAMES = 32
     total_frames = len(videos[0])
     print("total_frames:", total_frames)
     if total_frames > MAX_FRAMES:
-        # 均匀采样
+        # Uniform sampling
         step = total_frames / MAX_FRAMES
         sampled_indices = [int(i * step) for i in range(MAX_FRAMES)]
         videos = [videos[0][i] for i in sampled_indices]
@@ -131,11 +131,11 @@ def process_multimedia_input(conversation, processor):
         use_audio_in_video=USE_AUDIO_IN_VIDEO
     )
     
-    # 检查输入token数量
+    # Check input token count
     if hasattr(inputs, 'input_ids') and inputs.input_ids is not None:
         token_count = inputs.input_ids.shape[-1]
         print(f"Input token count: {token_count}")
-        if token_count > 30000:  # 接近32768限制时警告
+        if token_count > 30000:  # Warning when approaching 32768 limit
             print(f"WARNING: Token count ({token_count}) is approaching model limit (32768)")
     
     return inputs, USE_AUDIO_IN_VIDEO
@@ -146,7 +146,7 @@ def generate_model_response(model, inputs, use_audio_in_video):
     inputs = inputs.to(model.device).to(model.dtype)
     
     print("shape of inputs:", inputs.input_ids.shape)
-    # 保存输入长度用于后续截断生成的tokens
+    # Save input length for truncating generated tokens later
     input_length = inputs.input_ids.shape[-1] if hasattr(inputs, 'input_ids') and inputs.input_ids is not None else 0
     
     print("start inferencing...")
@@ -170,7 +170,7 @@ def generate_model_response(model, inputs, use_audio_in_video):
                 
     except Exception as e:
         print(f"Error during generation: {e}")
-        # 如果生成失败，返回错误信息
+        # If generation fails, return error information
         raise e
     
     del inputs
@@ -247,7 +247,7 @@ def process_single_qa_pair(qa_pair, model, processor):
         
         # Extract and evaluate answer
         print("decode the response...")
-        # 只解码新生成的tokens，排除输入部分
+        # Only decode newly generated tokens, exclude input part
         generated_tokens = text_ids[:, input_length:] if text_ids.shape[-1] > input_length else text_ids
         response_text = processor.batch_decode(generated_tokens, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
         
@@ -256,12 +256,12 @@ def process_single_qa_pair(qa_pair, model, processor):
         single_result['is_correct'] = clean_text(model_answer) == clean_text(correct_answer)
         
     except Exception as e:
-        # 特殊处理视频解码相关的错误
+        # Special handling for video decoding related errors
         error_str = str(e)
         if any(keyword in error_str.lower() for keyword in ['nal unit', 'invalid data', 'decord', 'avcodec', 'video']):
             print(f"❌ Video decoding failed for {video_path}: {type(e).__name__}: {e}")
             
-            # 标记不同类型的解码错误
+            # Mark different types of decoding errors
             if 'nal unit' in error_str.lower():
                 single_result['model_answer'] = 'Video corrupted: NAL unit error - unable to decode frames'
             elif 'invalid data' in error_str.lower():
@@ -269,9 +269,9 @@ def process_single_qa_pair(qa_pair, model, processor):
             else:
                 single_result['model_answer'] = f'Video decoding error: {type(e).__name__}'
                 
-            # 在结果中添加错误详情以便后续分析
+            # Add error details to result for subsequent analysis
             single_result['error_type'] = 'video_decode_failure'
-            single_result['error_details'] = str(e)[:200]  # 截断错误信息
+            single_result['error_details'] = str(e)[:200]  # Truncate error message
         else:
             print(f"❌ Processing error for {video_path}: {type(e).__name__}: {e}")
             single_result['model_answer'] = handle_processing_error(e, video_path)
@@ -296,9 +296,6 @@ def load_model_and_processor(model_name: str):
 def run_qwen_evaluation(model_name:str, data_json_file: str=None, video_dir: str=None, output_file: str=None, max_duration: int=None):
     """Run the evaluation on the dataset using the Qwen-Omni model."""
     set_seed(42)
-
-    # Initialize model and processor
-    # MODEL_NAME = "/fs-computility/llm_code_collab/liujiaheng/shihao/OmniBench-Video/Qwen/Qwen2.5-Omni-7B"
     
     model, processor = load_model_and_processor( model_name )
     
@@ -336,20 +333,60 @@ def run_qwen_evaluation(model_name:str, data_json_file: str=None, video_dir: str
     print_final_results(results, max_duration, output_file)
 
 
+def parse_args():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(description="HumanOmniV2 model evaluation script")
+    
+    # Data related arguments
+    parser.add_argument("--task_name", type=str, default="qa_data",
+                       help="Task name for output file naming")
+    parser.add_argument("--data_json_file", type=str, required=True,
+                       help="Path to QA data JSON file")
+    parser.add_argument("--video_dir", type=str, required=True,
+                       help="Path to video files directory")
+    
+    # Model related arguments
+    parser.add_argument("--model_name", type=str, required=True,
+                       help="Path to model directory")
+    
+    # Output related arguments
+    parser.add_argument("--output_dir", type=str, default="./eval_results",
+                       help="Output directory for results")
+    
+    # Evaluation parameters
+    parser.add_argument("--max_duration", type=int, default=6000,
+                       help="Maximum video duration in seconds")
+    parser.add_argument("--cuda_visible_devices", type=str, default="0",
+                       help="CUDA visible devices")
+    
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    task_name = "first_test"
-
-    base_dir = "/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/code/omni-bench"
-    data_json_file=f"{base_dir}/data/merged_qas_1_0817.json"
-    video_dir="/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/omni_videos_v1"
+    # Parse command line arguments
+    args = parse_args()
     
-    # model_name = f"{base_dir}/models/HumanOmniV2"
-    model_name = "/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/code/models/HumanOmniV2"
-    model_basename = os.path.basename(model_name)
-    output_file = f"{base_dir}/eval_results/{model_basename}_{task_name}.json"    
-
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    # Set environment variables
+    os.environ['CUDA_VISIBLE_DEVICES'] = args.cuda_visible_devices
     
-    max_duration = 6000
+    # Build output file path
+    model_basename = os.path.basename(args.model_name)
+    output_file = os.path.join(args.output_dir, f"{model_basename}_{args.task_name}.json")
     
-    run_qwen_evaluation(model_name, data_json_file, video_dir, output_file, max_duration)
+    # Create output directory
+    os.makedirs(args.output_dir, exist_ok=True)
+    
+    # Print configuration
+    print("=" * 50)
+    print("HumanOmniV2 Evaluation Configuration:")
+    print(f"Task Name: {args.task_name}")
+    print(f"Data File: {args.data_json_file}")
+    print(f"Video Directory: {args.video_dir}")
+    print(f"Model Path: {args.model_name}")
+    print(f"Output File: {output_file}")
+    print(f"Max Duration: {args.max_duration} seconds")
+    print(f"CUDA Devices: {args.cuda_visible_devices}")
+    print("=" * 50)
+    
+    # Execute evaluation
+    run_qwen_evaluation(args.model_name, args.data_json_file, args.video_dir, output_file, args.max_duration)
