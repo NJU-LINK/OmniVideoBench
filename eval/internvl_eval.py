@@ -489,7 +489,7 @@ if __name__ == "__main__":
     parser.add_argument("--data_json_file", type=str, required=True, help="Path to the data JSON file")
     parser.add_argument("--video_dir", type=str, required=True, help="Path to the video directory")
     parser.add_argument("--output_file", type=str, required=True, help="Path to the output JSON file")
-    parser.add_argument("--model_path", type=str, required=True, help="Path to the model directory")
+    parser.add_argument("--model_path", type=str, default="InternVL3_5-38B",required=True, help="Path to the model directory")
     parser.add_argument("--max_duration", type=int, default=6000, help="Maximum video duration in seconds")
     parser.add_argument("--num_segments", type=int, default=128, help="Number of video segments")
     parser.add_argument("--max_num", type=int, default=1, help="Maximum number of frames")
