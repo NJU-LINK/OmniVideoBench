@@ -5,7 +5,8 @@ import tempfile
 from typing import List, Dict, Any
 import gc
 import psutil
-import logging  # 1. 添加 logging 模块导入
+import logging
+import argparse
 
 import numpy as np
 from PIL import Image
@@ -19,35 +20,46 @@ from transformers import AutoModel, AutoTokenizer, BertTokenizer
 from videollama2 import model_init, mm_infer
 from videollama2.utils import disable_torch_init
 
-# 设置环境变量
+# Add parent directory to path to import custom dataloader
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from dataloader import VideoQADaloader
+
+# Set environment variables
 os.environ['TRANSFORMERS_OFFLINE'] = '1'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
-# 1. 添加自定义dataloader.py所在的绝对路径（omni-bench根目录），并插入到sys.path最前面
-custom_dataloader_path = "/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/code/omni-bench/"
-sys.path.insert(0, custom_dataloader_path)  # 插入到最前面，优先加载
 
-# 2. 导入自定义的VideoQADaloader（此时会优先加载omni-bench目录下的dataloader.py）
-from dataloader import VideoQADaloader
-# sys.path.append("../../")
-# from dataloader import VideoQADaloader
+def set_seed(seed=42):
+    """Set random seed for reproducibility"""
+    import random
+    import numpy as np
+    import torch
+    
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
-sys.path.append("../../utils/")
-from utils.utils import set_seed, filter_qa_pairs_by_duration
-
-set_seed(42)
-
-# 添加问题视频黑名单
-PROBLEMATIC_VIDEOS = set()
 
 def get_video_chunk_content(video_path, flatten=False):
-    """改进的视频内容提取函数，确保音频索引一致性"""
-    video = VideoFileClip(video_path)
-    logging.info(f'video_duration: {video.duration}') # print -> logging.info
+    """
+    Extract video frames and audio content from video file.
+    Ensures audio index consistency across all segments.
     
-    # 检查视频是否有音频轨道
+    Args:
+        video_path: Path to video file
+        flatten: Whether to flatten the output list
+        
+    Returns:
+        List of video chunks containing frames and audio segments
+    """
+    video = VideoFileClip(video_path)
+    logging.info(f'Video duration: {video.duration}s')
+    
+    # Check if video has audio track
     if video.audio is None:
-        logging.warning(f"警告: 视频 {video_path} 没有音频轨道") # print -> logging.warning
+        logging.warning(f"Warning: Video {video_path} has no audio track")
         duration = video.duration
         sr = 16000
         audio_np = np.zeros(int(duration * sr), dtype=np.float32)
@@ -58,15 +70,15 @@ def get_video_chunk_content(video_path, flatten=False):
                 video.audio.write_audiofile(temp_audio_file_path, codec="pcm_s16le", fps=16000)
                 audio_np, sr = librosa.load(temp_audio_file_path, sr=16000, mono=True)
         except Exception as e:
-            logging.error(f"音频提取失败: {e}，使用静默音频") # print -> logging.error
+            logging.error(f"Audio extraction failed: {e}, using silent audio")
             duration = video.duration
             sr = 16000
             audio_np = np.zeros(int(duration * sr), dtype=np.float32)
     
-    # 确保音频长度与视频时长匹配
+    # Ensure audio length matches video duration
     expected_audio_length = int(video.duration * sr)
     if len(audio_np) != expected_audio_length:
-        logging.info(f"音频长度调整: {len(audio_np)} -> {expected_audio_length}") # print -> logging.info
+        logging.info(f"Adjusting audio length: {len(audio_np)} -> {expected_audio_length}")
         if len(audio_np) < expected_audio_length:
             audio_np = np.pad(audio_np, (0, expected_audio_length - len(audio_np)), mode='constant', constant_values=0)
         else:
@@ -74,46 +86,46 @@ def get_video_chunk_content(video_path, flatten=False):
     
     num_units = math.ceil(video.duration)
     
-    # 预先计算所有有效的音频段，确保索引一致性
+    # Pre-compute all valid audio segments to ensure index consistency
     valid_segments = []
     for i in range(num_units):
         start_idx = sr * i
         end_idx = sr * (i + 1)
         
-        # 检查边界条件
+        # Check boundary conditions
         if start_idx >= len(audio_np):
-            logging.warning(f"警告: 第{i}段音频开始索引超出范围，跳过此段") # print -> logging.warning
+            logging.warning(f"Warning: Segment {i} start index out of range, skipping")
             continue
             
         if end_idx > len(audio_np):
             available_audio = audio_np[start_idx:]
-            if len(available_audio) < sr * 0.1:  # 如果剩余音频太短，跳过
-                logging.warning(f"警告: 第{i}段剩余音频太短({len(available_audio)}样本)，跳过此段") # print -> logging.warning
+            if len(available_audio) < sr * 0.1:  # Skip if remaining audio is too short
+                logging.warning(f"Warning: Segment {i} remaining audio too short ({len(available_audio)} samples), skipping")
                 continue
-            # 对于最后一段，调整end_idx到实际音频长度
+            # Adjust end_idx to actual audio length for last segment
             end_idx = len(audio_np)
         
         valid_segments.append((i, start_idx, end_idx))
     
-    # 基于有效段生成内容
+    # Generate content based on valid segments
     contents = []
     for segment_idx, start_idx, end_idx in valid_segments:
         try:
-            # 获取帧
+            # Get frame
             frame_time = min(segment_idx + 1, video.duration - 0.001)
             frame = video.get_frame(frame_time)
             image = Image.fromarray((frame).astype(np.uint8))
             
-            # 提取音频段
+            # Extract audio segment
             audio = audio_np[start_idx:end_idx]
             
-            # 确保音频长度为1秒（16000样本），除了最后一段
+            # Ensure audio length is 1 second (16000 samples), except for last segment
             if len(audio) < sr and segment_idx < num_units - 1:
                 audio = np.pad(audio, (0, sr - len(audio)), mode='constant', constant_values=0)
             elif len(audio) > sr:
                 audio = audio[:sr]
             
-            # 确保数据类型
+            # Ensure data type
             audio = audio.astype(np.float32)
             
             if flatten:
@@ -122,99 +134,99 @@ def get_video_chunk_content(video_path, flatten=False):
                 contents.append(["<unit>", image, audio])
                 
         except Exception as e:
-            logging.error(f"处理第{segment_idx}段时出错: {e}") # print -> logging.error
-            # 如果单个段处理失败，整个视频标记为有问题
+            logging.error(f"Error processing segment {segment_idx}: {e}")
             video.close()
             raise e
     
-    logging.info(f"总共处理了 {len(valid_segments)} 个有效音频段，共 {num_units} 段") # print -> logging.info
+    logging.info(f"Processed {len(valid_segments)} valid audio segments out of {num_units} total")
     
     video.close()
     return contents
 
+
 def write_result_to_file(result, output_file):
-    """将单个结果写入JSON文件"""
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    """Write a single result to JSON file"""
+    os.makedirs(os.path.dirname(output_file) if os.path.dirname(output_file) else '.', exist_ok=True)
     
-    # 如果文件不存在，创建空列表
+    # Create empty list if file doesn't exist
     if not os.path.exists(output_file):
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump([], f, indent=2, ensure_ascii=False)
     
-    # 读取现有结果
+    # Read existing results
     try:
         with open(output_file, "r", encoding="utf-8") as f:
             existing_results = json.load(f)
     except (json.JSONDecodeError, FileNotFoundError):
         existing_results = []
     
-    # 添加新结果
+    # Append new result
     existing_results.append(result)
     
-    # 写回文件
+    # Write back to file
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(existing_results, f, indent=2, ensure_ascii=False)
 
-def evaluate_model(dataloader, model,processor,  tokenizer, output_file,max_duration):
-    """改进的模型评估函数，实时写入结果"""
 
-    # 使用filter_qa_pairs_by_duration过滤QA对
-    qa_pairs = filter_qa_pairs_by_duration(dataloader.get_all_qa_pairs(),max_duration)
+def evaluate_model(dataloader, model, processor, tokenizer, output_file, max_duration=None):
+    """
+    Evaluate model on video QA dataset with real-time result writing.
     
-    # 内存监控
-    logging.info(f"开始评估，初始内存使用: {psutil.virtual_memory().percent}%") # print -> logging.info
-    logging.info(f"过滤后的QA对数量: {len(qa_pairs)}") # print -> logging.info
+    Args:
+        dataloader: VideoQADaloader instance
+        model: VideoLLaMA2 model
+        processor: Video/audio processor
+        tokenizer: Text tokenizer
+        output_file: Path to save results
+        max_duration: Maximum video duration to process (in seconds)
+    """
+    qa_pairs = dataloader.get_all_qa_pairs()
+    
+    # Filter by duration if specified
+    if max_duration is not None:
+        qa_pairs = [qa for qa in qa_pairs if qa.get('duration', 0) <= max_duration]
+        logging.info(f"Filtered QA pairs by duration <= {max_duration}s: {len(qa_pairs)} pairs")
+    
+    # Memory monitoring
+    logging.info(f"Starting evaluation, initial memory usage: {psutil.virtual_memory().percent}%")
+    logging.info(f"Total QA pairs: {len(qa_pairs)}")
     torch.cuda.empty_cache()
     gc.collect()
 
     processed_count = 0
     error_count = 0
-
-    # 回答正确的问题数目
-    right_count = 0
+    correct_count = 0
 
     for idx, item in enumerate(qa_pairs):
         video_path = item['video_path']
-        unique_id = item.get('unique_id', f"video_{idx}")
         video_name = os.path.basename(video_path)
         
-        logging.info(f"\n处理第 {idx+1}/{len(qa_pairs)} 个视频: {video_name}") # print -> logging.info
+        logging.info(f"\nProcessing {idx+1}/{len(qa_pairs)}: {video_name}")
         
-        # 检查是否在黑名单中
-        if video_path in PROBLEMATIC_VIDEOS:
-            logging.warning(f"跳过问题视频: {video_name}") # print -> logging.warning
-            continue
-            
-        # 初始化结果对象
+        # Initialize result object
         result = {
-            # "unique_id": unique_id, # <--- 第1处修改：注释掉此行
             "video": video_name,
             "duration": item.get("duration", 0),
             "question": item.get("question", ""),
-            "options": item.get("options",[]),
-            "correct_answer": item.get("answer", ""),
+            "options": item.get("options", []),
+            "answer": item.get("answer", ""),
             "model_answer": "",
             "is_correct": False
         }
 
-        # 处理选项格式
-        options = item.get("options", [])
-        options_text = "\n".join(options)
-
+        # Check if video exists
         if not os.path.exists(video_path):
-            logging.error(f"视频不存在: {video_path}") # print -> logging.error
-            result["model_answer"] = f"Error: 视频文件不存在 - {video_path}"
+            logging.error(f"Video not found: {video_path}")
+            result["model_answer"] = f"Error: Video file not found - {video_path}"
             write_result_to_file(result, output_file)
             error_count += 1
             continue
 
         try:
-            # --- HumanOmni 数据预处理 ---
-            # 使用HumanOmni的processor来处理视频和音频
-            # processor['video'] 和 processor['audio'] 直接接受文件路径
+            # Process video with VideoLLaMA2 processor
             video_tensor = processor['video'](video_path)
 
-            # --- 构建Prompt ---
+            # Build prompt
             question = item.get("question")
             options = item.get("options", [])
             correct_answer = item.get("answer")
@@ -224,22 +236,18 @@ def evaluate_model(dataloader, model,processor,  tokenizer, output_file,max_dura
                 "You are given a video. Based on the content of the video, answer the following question:\n\n"
                 f"Question:\n{question}\n\n"
                 f"Options:\n{options_text}\n\n"
-                "Answer with the option's letter directly(e.g., A, B, C, or D)."
-                "If your access to the video content is limited, at least one option that is more likely than the others must be chosen."
-                "Mustn't give any other reason for can not choose!"
+                "Answer with the option's letter directly (e.g., A, B, C, or D). "
+                "If your access to the video content is limited, at least one option that is more likely than the others must be chosen. "
+                "Do not give any other reason for not choosing!"
             )
 
-            # ----Human Omni模型推理----
+            # Model inference
             try:
                 output = mm_infer(
                     image_or_video=video_tensor,
                     instruct=instruct,
                     model=model,
                     tokenizer=tokenizer,
-                    # audio=audio_tensor,
-                    # modal='video_audio',
-                    # question=question, # mm_infer 需要 question 参数
-                    # bert_tokeni=bert_tokenizer,
                     do_sample=False,
                 )
                 
@@ -249,113 +257,123 @@ def evaluate_model(dataloader, model,processor,  tokenizer, output_file,max_dura
                 result["model_answer"] = model_answer
                 result["is_correct"] = is_correct
 
-                if is_correct == True:
-                    right_count += 1
+                if is_correct:
+                    correct_count += 1
 
-                processed_count += 1                        
+                processed_count += 1
                 
             except torch.cuda.OutOfMemoryError as oom_error:
-                error_msg = f"Error: OutOfMemoryError - CUDA out of memory. {str(oom_error)}"
-                logging.error(f"CUDA内存不足: {oom_error}") # print -> logging.error
+                error_msg = f"Error: CUDA out of memory - {str(oom_error)}"
+                logging.error(f"CUDA OOM: {oom_error}")
                 result["model_answer"] = error_msg
                 result["is_correct"] = False
                 error_count += 1
                 
-                # 清理内存并继续
+                # Clear memory and continue
                 torch.cuda.empty_cache()
                 gc.collect()
                 
-            except AssertionError as ae:
-                error_msg = f"Error: AssertionError - 音频索引不匹配: {str(ae)}"
-                logging.error(f"断言错误: {ae}") # print -> logging.error
-                result["model_answer"] = error_msg
-                result["is_correct"] = False
-                PROBLEMATIC_VIDEOS.add(video_path)
-                error_count += 1
-                
             except Exception as model_error:
                 error_msg = f"Error: {type(model_error).__name__} - {str(model_error)}"
-                logging.error(f"模型推理错误: {model_error}") # print -> logging.error
+                logging.error(f"Model inference error: {model_error}")
                 result["model_answer"] = error_msg
                 result["is_correct"] = False
-                PROBLEMATIC_VIDEOS.add(video_path)
                 error_count += 1
 
         except Exception as e:
             error_msg = f"Error: {type(e).__name__} - {str(e)}"
-            logging.error(f"处理视频 {video_name} 时发生错误: {e}") # print -> logging.error
+            logging.error(f"Error processing video {video_name}: {e}")
             result["model_answer"] = error_msg
             result["is_correct"] = False
-            PROBLEMATIC_VIDEOS.add(video_path)
             error_count += 1
         
-        # 写入结果到文件
+        # Write result to file
         write_result_to_file(result, output_file)
-        # <--- 第2处修改：修改下面的print语句，因为它用到了unique_id
-        logging.info(f"结果已写入: {video_name} - {result['model_answer'][:50]}...") # print -> logging.info
+        logging.info(f"Result written: {video_name} - {result['model_answer'][:50]}...")
         
-        # 定期内存清理
-        if (idx + 1) % 5 == 0:  # 更频繁的清理
+        # Periodic memory cleanup
+        if (idx + 1) % 5 == 0:
             torch.cuda.empty_cache()
             gc.collect()
             memory_percent = psutil.virtual_memory().percent
-            logging.info(f"第{idx+1}个视频处理完成，当前内存使用: {memory_percent}%") # print -> logging.info
+            logging.info(f"Processed {idx+1} videos, current memory usage: {memory_percent}%")
             
-            # 如果内存使用过高，强制清理
+            # Force cleanup if memory usage is too high
             if memory_percent > 85:
-                logging.warning("内存使用过高，执行强制清理...") # print -> logging.warning
+                logging.warning("High memory usage detected, forcing cleanup...")
                 torch.cuda.empty_cache()
                 gc.collect()
     
-    logging.info(f"\n评估完成!") # print -> logging.info
-    logging.info(f"成功处理: {processed_count} 个视频") # print -> logging.info
-    logging.info(f"错误数量: {error_count} 个") # print -> logging.info
-    logging.info(f"问题视频数量: {len(PROBLEMATIC_VIDEOS)}") # print -> logging.info
-    logging.info(f"正确率为：{( right_count / processed_count ) * 100: .2f}%") # print -> logging.info
+    # Final statistics
+    logging.info(f"\nEvaluation complete!")
+    logging.info(f"Successfully processed: {processed_count} videos")
+    logging.info(f"Errors: {error_count}")
+    if processed_count > 0:
+        logging.info(f"Accuracy: {(correct_count / processed_count) * 100:.2f}% ({correct_count}/{processed_count})")
 
-if __name__ == "__main__":
-    # 2. 添加此日志配置块
-    log_filename = 'VideoLLaMA2_log.txt'
+
+def main():
+    parser = argparse.ArgumentParser(description='VideoLLaMA2 Evaluation Script')
+    parser.add_argument('--model_path', type=str, required=True,
+                       help='Path to VideoLLaMA2 model')
+    parser.add_argument('--input_file', type=str, default='data.json',
+                       help='Path to input QA JSON file')
+    parser.add_argument('--video_dir', type=str, default='./videos',
+                       help='Directory containing video files')
+    parser.add_argument('--output_file', type=str, default=None,
+                       help='Path to save results (default: {model_name}_results.json)')
+    parser.add_argument('--max_duration', type=int, default=None,
+                       help='Maximum video duration to process (in seconds)')
+    parser.add_argument('--log_file', type=str, default='videollama2_eval.log',
+                       help='Path to log file')
+    parser.add_argument('--cuda_device', type=str, default='0',
+                       help='CUDA device to use')
+    
+    args = parser.parse_args()
+    
+    # Set CUDA device
+    os.environ['CUDA_VISIBLE_DEVICES'] = args.cuda_device
+    
+    # Setup logging
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler(log_filename, mode='w', encoding='utf-8'), # 写入文件
-            logging.StreamHandler(sys.stdout)  # 同时输出到控制台
+            logging.FileHandler(args.log_file, mode='w', encoding='utf-8'),
+            logging.StreamHandler(sys.stdout)
         ]
     )
-    # --- 日志配置结束 ---
-
-    task_name = "first_test"
-    # task_name = "waiting_hy"
-    #data_json_file = "/fs-computility/llm_code_collab/liujiaheng/caoruili/omni-bench/data/merged_qas_1_0811.json"
-    data_json_file = "/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/code/omni-bench/final_data/qa_data.json"
-
     
-    # data_json_file = "/fs-computility/llm_code_collab/liujiaheng/caoruili/omni-bench/label_data/waiting_0812/hy.json"
-    #video_dir = "/tos-bjml-llm-code-collab/liujiaheng/omni-videos-lcr/omni_videos_v1"
-    video_dir = "/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/omni_videos_v2"
-
-
-    #model_name = "/fs-computility/llm_code_collab/liujiaheng/caoruili/models/VideoLLaMA2-7B"
-    model_name = "/cpfs01/user/liujiaheng/workspace/caoruili/omni-videos-lcr/code/models/VideoLLaMA2-7B"
-
-
-    model_basename = os.path.basename(model_name)
-    output_file = f"./{model_basename}_{task_name}.json"
-
-    dataloader = VideoQADaloader(data_json_file, video_dir)
-
-    max_duration=6000
-
-    # 禁用Torch初始化
+    # Set random seed
+    set_seed(42)
+    
+    # Determine output file name
+    if args.output_file is None:
+        model_basename = os.path.basename(args.model_path)
+        input_basename = os.path.splitext(os.path.basename(args.input_file))[0]
+        args.output_file = f"{model_basename}_{input_basename}_results.json"
+    
+    logging.info(f"Model path: {args.model_path}")
+    logging.info(f"Input file: {args.input_file}")
+    logging.info(f"Video directory: {args.video_dir}")
+    logging.info(f"Output file: {args.output_file}")
+    logging.info(f"Max duration: {args.max_duration}s" if args.max_duration else "Max duration: No limit")
+    
+    # Load dataloader
+    dataloader = VideoQADaloader(args.input_file, args.video_dir)
+    
+    # Initialize model
+    logging.info("Initializing model...")
     disable_torch_init()
-
-    # 初始化模型、处理器和分词器
-    model, processor, tokenizer = model_init(model_path=model_name)
+    model, processor, tokenizer = model_init(model_path=args.model_path)
     model = model.eval().cuda()
+    logging.info("Model loaded successfully")
+    
+    # Run evaluation
+    evaluate_model(dataloader, model, processor, tokenizer, args.output_file, args.max_duration)
+    
+    logging.info(f"\nEvaluation complete! Results saved to {args.output_file}")
 
-    # 直接在evaluate_model中处理结果写入
-    evaluate_model(dataloader, model, processor, tokenizer, output_file,max_duration)
 
-    logging.info(f"\n评测完成，结果已实时保存到 {output_file}") # print -> logging.info
+if __name__ == "__main__":
+    main()
