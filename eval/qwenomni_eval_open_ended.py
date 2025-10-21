@@ -37,9 +37,7 @@ from utils.audio_process import process_audio_info
 from dataloader import VideoQADaloader
 
 
-# 设置环境变量
 os.environ['TRANSFORMERS_OFFLINE'] = '1'
-# os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
 os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
 
 def process_mm_info(conversations, use_audio_in_video, return_video_kwargs=False):
@@ -51,50 +49,6 @@ def process_mm_info(conversations, use_audio_in_video, return_video_kwargs=False
 def load_model_and_processor(model_name: str):
     """Load and initialize the Qwen model and processor."""
     print("Loading model and processor...")
-#     _device_map = {
-#     'thinker.audio_tower': 0,
-#     'thinker.visual': 0,
-#     'thinker.model.embed_tokens': 0,
-    
-#     'thinker.model.layers.0': 1,
-#     'thinker.model.layers.1': 1,
-#     'thinker.model.layers.2': 1,
-#     'thinker.model.layers.3': 1,
-
-#     'thinker.model.layers.4': 1,
-#     'thinker.model.layers.5': 1,
-#     'thinker.model.layers.6': 1,
-#     'thinker.model.layers.7': 1,
-#     'thinker.model.layers.8': 1,
-#     'thinker.model.layers.9': 1,
-#     'thinker.model.layers.10': 2,
-#     'thinker.model.layers.11': 2,
-#     'thinker.model.layers.12': 2,
-#     'thinker.model.layers.13': 2,
-#     'thinker.model.layers.14': 2,
-#     'thinker.model.layers.15': 2,
-
-#     'thinker.model.layers.16': 2,
-#     'thinker.model.layers.17': 2,
-#     'thinker.model.layers.18': 2,
-#     'thinker.model.layers.19': 2,
-#     'thinker.model.layers.20': 2,
-#     'thinker.model.layers.21': 3,
-#     'thinker.model.layers.22': 3,
-#     'thinker.model.layers.23': 3,
-#     'thinker.model.layers.24': 3,
-#     'thinker.model.layers.25': 3,
-#     'thinker.model.layers.26': 3,
-#     'thinker.model.layers.27': 3,
-
-#     'thinker.model.norm': 3,
-#     'thinker.model.rotary_emb': 0,
-    
-#     'thinker.lm_head': 0,
-    
-#     'talker': 3,
-#     'token2wav': 3
-# }
     model = Qwen2_5OmniForConditionalGeneration.from_pretrained(
         model_name,
         torch_dtype=torch.bfloat16,
@@ -125,58 +79,10 @@ def create_result_template(qa_pair):
         'is_correct': False,
     }
 
-# def get_prompt(question):
-#     text_prompt = f"""### Instruction
-#     Here is a question about the video below, please follow these steps:
-#     1.  First, provide a step-by-step reasoning of your thought process.
-#     2.  Then, provide the final, concise answer based on your reasoning.
-
-#     ### Question
-#     {question}
-
-#     ### Answer format
-#     **Reasoning**:
-#     1. [Step 1 of your reasoning]
-#     2. [Step 2 of your reasoning]
-#     3. [...]
-
-#     **Final Answer**: [Your final and concise answer]"""
-#     return text_prompt
-
-# def build_conversation(video_path, question, options):
-#     """Build conversation format for the model."""
-#     # options_text = "\n".join(options)
-#     prompt = get_prompt(question)
-
-#     conversation = [
-#         {
-#             "role": "system",
-#             "content": [
-#                 {"type": "text", "text": "You are Qwen, a virtual human developed by the Qwen Team, Alibaba Group, capable of perceiving auditory and visual inputs, as well as generating text and speech."}
-#             ],
-#         },
-#         {
-#             "role": "user",
-#             "content": [
-#                 {"type": "video", "video": video_path},
-#                 {"type": "text", "text": prompt}
-#             ]
-#         }
-#     ]
-    
-#     return conversation, prompt
 
 def build_conversation(video_path, question, options):
     """Build conversation format for the model."""
     options_text = "\n".join(options)
-    # prompt = (
-    #     "You are given a video. Based on the content of the video, answer the following question:\n\n"
-    #     f"Question:\n{question}\n\n"
-    #     f"Options:\n{options_text}\n\n"
-    #     "Answer with the option's letter directly(e.g., A, B, C, or D)."
-    #     "If your access to the video content is limited, at least one option that is more likely than the others must be chosen."
-    #     "Mustn't give any other reason for can not choose!"
-    # )
     prompt = (
         "### Instruction"
         "You are given a question about the following video."
@@ -228,12 +134,12 @@ def process_multimedia_input(conversation, processor):
     print("processing video...")
     audios, images, videos = process_mm_info(conversation, use_audio_in_video=USE_AUDIO_IN_VIDEO)
 
-    # TODO: 这里按照单卡上限对长视频进行采样，保持帧数不超过120
+    # TODO: keep frames under 120
     MAX_FRAMES=120
     total_frames = len(videos)
     if total_frames > MAX_FRAMES:
         print(f"Video has {total_frames} frames, exceeding {MAX_FRAMES}. Sampling down...")
-        # 均匀采样
+        # uniform sampling
         step = total_frames / MAX_FRAMES
         sampled_indices = [int(i * step) for i in range(MAX_FRAMES)]
         videos = [videos[i] for i in sampled_indices]
@@ -299,10 +205,7 @@ def extract_model_answer(response_text,prompt=None):
     else:
         # If no "assistant" marker, take the last part after the prompt
         model_answer = response_text.split(prompt)[-1].strip()
-    
-    # Additional processing for common answer formats
-    # Handle /box{X} format (LaTeX boxed answers)
-    
+
     return model_answer
 
 def process_single_qa_pair(qa_pair, model, processor, processed_ids):
