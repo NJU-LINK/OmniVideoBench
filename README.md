@@ -203,9 +203,9 @@ python -m eval.gemini_eval \
 
 ## 📝 Evaluation Results 
 
-<p align="left">
+<p align="center">
   <a href="https://omnivideobench.github.io/omnivideobench_home/#leaderboard">
-    <img src="https://img.shields.io/badge/🏆%20Full%20Leaderboard-View%20Online-green.svg" alt="Leaderboard">
+    <img src="https://img.shields.io/badge/🏆%20Full%20Leaderboard%20%26%20Submit%20Your%20Results-View%20Online-green?style=for-the-badge&labelColor=4A90E2" alt="Leaderboard" style="font-size: 24px;">
   </a>
 </p>
 
