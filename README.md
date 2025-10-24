@@ -101,52 +101,53 @@ To access the OmniVideoBench dataset and videos, please:
 2. **Place videos**: Download videos and place them in `./videos/` directory
 3. **Load QA pairs**: The benchmark question-answer pairs are provided in `data.json`
 
-### 📋 Data Structure
+#### Data Structure
 
 The dataset follows a structured JSON format. Each entry contains video metadata and multiple QA pairs:
 
 ```json
 [
   {
-    "video": "video_123",
-    "duration": "00:05:30",
-    "category": "Daily Life",
-    "subcategory": "Cooking",
+    "video": "video_10",
+    "video_type": "Cartoon",
+    "duration": "04:23",
     "questions": [
       {
-        "question": "What cooking technique did the chef use after adding the vegetables?",
-        "options": [
-          "A. Stir-frying at high heat",
-          "B. Steaming with a lid",
-          "C. Deep frying in oil",
-          "D. Boiling in water"
+        "question": "When the man and woman in the picture were discussing ice cubes, why did they notice Superman behind them?",
+        "question_type": "causal reasoning",
+        "audio_type": "Sound",
+        "reasoning_steps": [
+          {
+            "modality": "vision",
+            "evidence": "they notice Superman at 0:37.",
+            "inference": "get the Superman."
+          },
+          {
+            "modality": "vision",
+            "evidence": "Superman just turned around and took a step.",
+            "inference": "get the point."
+          },
+          {
+            "modality": "audio",
+            "evidence": "Superman made a sound when he stepped on the wooden floor.",
+            "inference": "Because Superman made a sound when he stepped on the wooden floor."
+          }
         ],
-        "correct_option": "A",
-        "reasoning_type": "Temporal Sequencing",
-        "modality": "Audio-Visual",
-        "atomic_reasoning": [
-          {"step": 1, "modality": "V", "description": "Observe vegetables being added to pan"},
-          {"step": 2, "modality": "A", "description": "Hear sizzling sound indicating high heat"},
-          {"step": 3, "modality": "V", "description": "See rapid stirring motion"},
-          {"step": 4, "modality": "AV", "description": "Combine visual motion with audio cues"}
-        ]
+        "answer": "Because Superman made a sound when he stepped on the wooden floor.",
+        "options": [
+          "A.Because Superman slammed the door with a loud noise.",
+          "B.Because Superman made a sound when he stepped on the wooden floor.",
+          "C.Because Superman's robe fell off.",
+          "D.Because Superman made too much noise while eating."
+        ],
+        "correct_option": "B"
       }
     ]
   }
 ]
 ```
 
-**Key Fields:**
-- `video`: Video filename identifier
-- `duration`: Video length in HH:MM:SS format
-- `category` / `subcategory`: Content classification
-- `questions`: Array of QA pairs with:
-  - `question`: The question text
-  - `options`: Multiple choice options (A-D)
-  - `correct_option`: Ground truth answer
-  - `reasoning_type`: One of 13 reasoning dimensions
-  - `modality`: Required modalities (Audio, Visual, or Audio-Visual)
-  - `atomic_reasoning`: Step-by-step reasoning chain with modality annotations
+
 
 ### 🔧 Evaluation
 
