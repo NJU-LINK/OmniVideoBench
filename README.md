@@ -9,9 +9,9 @@
   <a href="https://omnivideobench.github.io/omnivideobench_home/">
     <img src="https://img.shields.io/badge/🌐%20Homepage-OmniVideoBench-blue.svg" alt="Homepage">
   </a>
-  <!-- <a href="https://arxiv.org/abs/2510.12345">
-    <img src="https://img.shields.io/badge/Paper-ArXiv-red.svg" alt="Arxiv Paper">
-  </a> -->
+  <a href="https://huggingface.co/datasets/NJU-LINK/OmniVideoBench">
+    <img src="https://img.shields.io/badge/🤗%20HuggingFace-Dataset-yellow.svg" alt="HuggingFace Dataset">
+  </a>
   <a href="https://arxiv.org/abs/2510.10689">
     <img src="https://img.shields.io/badge/Paper-ArXiv-red.svg" alt="Arxiv Paper">
   </a >
@@ -91,8 +91,122 @@ If the original authors of the related works still believe that the videos shoul
 
 ---
 
+## 🚀 Quick Start & Usage Examples
 
-## 📊 Evaluation Results
+### 📥 Dataset Access
+
+To access the OmniVideoBench dataset and videos, please:
+
+1. **Download the dataset**: Please read our license requirements or complete the <a href="https://huggingface.co/datasets/NJU-LINK/OmniVideoBench"> questionnaire </a>. If you agree, please send an email to our lead author to request access: [Contact Us](mailto:caoruili507@gmail.com?cc=yu.chen.8525@gmail.com,jiyiiiyyy@gmail.com,liujiaheng@nju.edu.cn&subject=Request%20Access%20to%20OmniVideoBench&body=please%20fill%20in%20your%20real%20information~)
+2. **Place videos**: Download videos and place them in `./videos/` directory
+3. **Load QA pairs**: The benchmark question-answer pairs are provided in `data.json`
+
+### 📋 Data Structure
+
+The dataset follows a structured JSON format. Each entry contains video metadata and multiple QA pairs:
+
+```json
+[
+  {
+    "video": "video_123",
+    "duration": "00:05:30",
+    "category": "Daily Life",
+    "subcategory": "Cooking",
+    "questions": [
+      {
+        "question": "What cooking technique did the chef use after adding the vegetables?",
+        "options": [
+          "A. Stir-frying at high heat",
+          "B. Steaming with a lid",
+          "C. Deep frying in oil",
+          "D. Boiling in water"
+        ],
+        "correct_option": "A",
+        "reasoning_type": "Temporal Sequencing",
+        "modality": "Audio-Visual",
+        "atomic_reasoning": [
+          {"step": 1, "modality": "V", "description": "Observe vegetables being added to pan"},
+          {"step": 2, "modality": "A", "description": "Hear sizzling sound indicating high heat"},
+          {"step": 3, "modality": "V", "description": "See rapid stirring motion"},
+          {"step": 4, "modality": "AV", "description": "Combine visual motion with audio cues"}
+        ]
+      }
+    ]
+  }
+]
+```
+
+**Key Fields:**
+- `video`: Video filename identifier
+- `duration`: Video length in HH:MM:SS format
+- `category` / `subcategory`: Content classification
+- `questions`: Array of QA pairs with:
+  - `question`: The question text
+  - `options`: Multiple choice options (A-D)
+  - `correct_option`: Ground truth answer
+  - `reasoning_type`: One of 13 reasoning dimensions
+  - `modality`: Required modalities (Audio, Visual, or Audio-Visual)
+  - `atomic_reasoning`: Step-by-step reasoning chain with modality annotations
+
+### 🔧 Evaluation
+
+#### For Open-Source Models
+Create conda environment from `./envs` and run evaluation scripts:
+```bash
+conda env create -f ./envs/environment_qwenomni.yml
+conda activate qwenomni
+python eval/qwenomni_eval.py \
+    --model_path /path/to/model \
+    --input_file data.json \
+    --video_dir ./videos
+```
+
+#### For Closed-Source Models
+Use API-based evaluation. Example with Gemini:
+```bash
+# Single-threaded evaluation (default)
+python -m eval.gemini_eval \
+    --api_key YOUR_API_KEY \
+    --models gemini-2.0-flash \
+    --input_file data.json \
+    --video_dir ./videos
+
+# Multi-threaded evaluation (faster)
+python -m eval.gemini_eval \
+    --api_key YOUR_API_KEY \
+    --models gemini-2.0-flash gemini-2.5-flash \
+    --multithread \
+    -w 15 \
+    --input_file data.json \
+    --video_dir ./videos
+
+# Vision-only mode (without audio)
+python -m eval.gemini_eval \
+    --api_key YOUR_API_KEY \
+    --models gemini-2.5-pro \
+    --no_sound \
+    --input_file data.json \
+    --video_dir ./videos
+```
+
+##### 🔑 Key Parameters
+
+- `--api_key`: Your API key (required for closed-source models)
+- `--models`: Model(s) to evaluate, space-separated (default: all Gemini models)
+- `--input_file`: Path to QA JSON file (default: `data.json`)
+- `--video_dir`: Video files directory (default: `./videos`)
+- `--multithread`: Enable multi-threaded mode (default: single-threaded)
+- `-w, --max_workers`: Number of concurrent threads (default: 15, only for multithread mode)
+- `--no_sound`: Vision-only evaluation without audio
+
+
+## 📝 Evaluation Results 
+
+<p align="left">
+  <a href="https://omnivideobench.github.io/omnivideobench_home/#leaderboard">
+    <img src="https://img.shields.io/badge/🏆%20Full%20Leaderboard-View%20Online-green.svg" alt="Leaderboard">
+  </a>
+</p>
 
 OmniVideoBench highlights a clear **performance gap** between **closed-source** and **open-source** omni-models —  
 showing that genuine audio-visual reasoning remains a **major unsolved challenge**.
