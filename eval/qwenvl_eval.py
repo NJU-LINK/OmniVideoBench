@@ -398,60 +398,6 @@ def run_qwenvl_evaluation(data_json_file: str, video_dir: str, model_name: str, 
     # Print final results
     print_final_results(results, max_duration, output_file)
 
-# def run_qwenvl_evaluation(data_json_file: str, video_dir: str, output_file: str, max_duration: int):
-#     """Run the evaluation on the dataset using the Qwen2.5-VL model."""
-#     set_seed(42)
-
-#     # Initialize model and processor
-#     MODEL_NAME = "/fs-computility/llm_code_collab/liujiaheng/caoruili/models/Qwen2.5-VL-7B-Instruct"
-#     model, processor = load_qwenvl_model_and_processor(MODEL_NAME)
-    
-#     # Load and filter data
-#     dataloader = VideoQADaloader(data_json_file=data_json_file, video_dir=video_dir)
-#     all_qa_pairs = dataloader.get_all_qa_pairs()
-#     if not all_qa_pairs:
-#         print("Failed to load data or no QA pairs found. Exiting evaluation.")
-#         return
-    
-#     filtered_qa_pairs = filter_qa_pairs_by_duration(all_qa_pairs, max_duration)
-    
-#     if not filtered_qa_pairs:
-#         print(f"No videos with duration < {max_duration} seconds found. Exiting evaluation.")
-#         return
-    
-#     # Load existing results for resume functionality
-#     results, processed_ids = load_existing_results(output_file)
-    
-#     # --- REFINED LOGIC FOR RESUMING ---
-#     # Filter out the QA pairs that have already been processed
-#     qa_pairs_to_process = [
-#         qa for qa in filtered_qa_pairs if create_unique_id(qa) not in processed_ids
-#     ]
-    
-#     total_qa_count = len(filtered_qa_pairs)
-#     remaining_count = len(qa_pairs_to_process)
-    
-#     print(f"Found {total_qa_count} total QA pairs.")
-#     print(f"Resuming from {len(results)} existing results. {remaining_count} items remaining to process.")
-    
-#     if not qa_pairs_to_process:
-#         print("No new items to process. Evaluation may be complete.")
-#     else:
-#         # Process each remaining QA pair
-#         for qa_pair in tqdm(qa_pairs_to_process, desc="Evaluating Qwen2.5-VL"):
-#             single_result = process_single_qa_pair(qa_pair, model, processor, processed_ids)
-            
-#             if single_result is not None:
-#                 results.append(single_result)
-                
-#                 # Save results after each processing
-#                 save_results(results, output_file)
-                
-#                 # Print current progress
-#                 calculate_and_print_progress(results, total_qa_count, max_duration)
-    
-#     # Print final results
-#     print_final_results(results, max_duration, output_file)
 
 if __name__ == "__main__":
     import argparse

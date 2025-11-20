@@ -100,7 +100,6 @@ To access the OmniVideoBench dataset and videos, please:
 1. **Download the dataset**: Please read our license requirements or complete the <a href="https://huggingface.co/datasets/NJU-LINK/OmniVideoBench"> questionnaire </a>. If you agree, please send an email to our lead author to request access: [Contact Us](mailto:caoruili507@gmail.com?cc=yu.chen.8525@gmail.com,jiyiiiyyy@gmail.com,liujiaheng@nju.edu.cn&subject=Request%20Access%20to%20OmniVideoBench&body=please%20fill%20in%20your%20real%20information~)
 2. **Place videos**: Download videos and place them in `./videos/` directory
 3. **Load QA pairs**: The benchmark question-answer pairs are provided in `data.json`
-
 #### Data Structure
 
 The dataset follows a structured JSON format. Each entry contains video metadata and multiple QA pairs:
@@ -244,20 +243,3 @@ showing that genuine audio-visual reasoning remains a **major unsolved challenge
 </details>
 
 
----
-
-## 🪶 Citation
-
-If you find **OmniVideoBench** useful for your research, please cite:
-
-```bibtex
-@misc{li2025omnivideobenchaudiovisualunderstandingevaluation,
-      title={OmniVideoBench: Towards Audio-Visual Understanding Evaluation for Omni MLLMs}, 
-      author={Caorui Li and Yu Chen and Yiyan Ji and Jin Xu and Zhenyu Cui and Shihao Li and Yuanxing Zhang and Jiafu Tang and Zhenghao Song and Dingling Zhang and Ying He and Haoxiang Liu and Yuxuan Wang and Qiufeng Wang and Zhenhe Wu and Jiehui Luo and Zhiyu Pan and Weihao Xie and Chenchen Zhang and Zhaohui Wang and Jiayi Tian and Yanghai Wang and Zhe Cao and Minxin Dai and Ke Wang and Runzhe Wen and Yinghao Ma and Yaning Pan and Sungkyun Chang and Termeh Taheri and Haiwen Xia and Christos Plachouras and Emmanouil Benetos and Yizhi Li and Ge Zhang and Jian Yang and Tianhao Peng and Zili Wang and Minghao Liu and Junran Peng and Zhaoxiang Zhang and Jiaheng Liu},
-      year={2025},
-      eprint={2510.10689},
-      archivePrefix={arXiv},
-      primaryClass={cs.AI},
-      url={https://arxiv.org/abs/2510.10689}, 
-}
-```
