@@ -79,6 +79,13 @@ A glance at how OmniVideoBench was built — from raw videos to verified reasoni
 
 ---
 
+## 📰 Events
+
+- 🎉 **ICLR 2026 Poster**: Our paper has been accepted as a poster at **ICLR 2026**!
+- 📦 **HuggingFace Dataset**: OmniVideoBench dataset is now available on HuggingFace! You can directly download and use the dataset from [HuggingFace](https://huggingface.co/datasets/NJU-LINK/OmniVideoBench).
+
+---
+
 ## 🌟 License
 
 Our dataset is under the CC-BY-NC-SA-4.0 license.
@@ -97,9 +104,9 @@ If the original authors of the related works still believe that the videos shoul
 
 To access the OmniVideoBench dataset and videos, please:
 
-1. **Download the dataset**: Please read our license requirements or complete the <a href="https://huggingface.co/datasets/NJU-LINK/OmniVideoBench"> questionnaire </a>. If you agree, please send an email to our lead author to request access: [Contact Us](mailto:caoruili507@gmail.com?cc=yu.chen.8525@gmail.com,jiyiiiyyy@gmail.com,liujiaheng@nju.edu.cn&subject=Request%20Access%20to%20OmniVideoBench&body=please%20fill%20in%20your%20real%20information~)
-2. **Place videos**: Download videos and place them in `./videos/` directory
-3. **Load QA pairs**: The benchmark question-answer pairs are provided in `data.json`
+1. **Complete the questionnaire**: Please fill out the <a href="https://huggingface.co/datasets/NJU-LINK/OmniVideoBench"> questionnaire </a> on HuggingFace to agree to the license terms.
+2. **Download from HuggingFace**: Once your access request is approved, you can directly download the dataset from [HuggingFace](https://huggingface.co/datasets/NJU-LINK/OmniVideoBench).
+
 #### Data Structure
 
 The dataset follows a structured JSON format. Each entry contains video metadata and multiple QA pairs:
